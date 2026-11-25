@@ -9,6 +9,7 @@ import androidx.activity.enableEdgeToEdge
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        KeepAliveRuntime.from(this).ensureStarted()
         enableEdgeToEdge()
         setContent {
             ClockScreen()
@@ -18,10 +19,12 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        KeepAliveRuntime.from(this).onAppForeground()
     }
 
     override fun onStop() {
         super.onStop()
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        KeepAliveRuntime.from(this).onAppBackground()
     }
 }

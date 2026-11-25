@@ -68,12 +68,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import app.smartdisplay.audio.LocalPlaybackDucker
-import app.smartdisplay.audio.rememberEffectPlayer
-import app.smartdisplay.audio.rememberSoundPresenceGate
 import app.smartdisplay.jihou.holidayAndSeasonalLabel
-import app.smartdisplay.jihou.rememberHourlyChimeController
-import app.smartdisplay.jihou.rememberJihouSettings
 import app.smartdisplay.media.ArtworkFrame
 import app.smartdisplay.media.SystemMedia
 import app.smartdisplay.media.SystemMediaHub
@@ -82,11 +77,6 @@ import app.smartdisplay.notification.AppNotification
 import app.smartdisplay.notification.NotificationBanner
 import app.smartdisplay.notification.NotificationCategoryGeneral
 import app.smartdisplay.notification.NotificationSoundEffect
-import app.smartdisplay.notification.rememberDeviceNotificationAnnouncer
-import app.smartdisplay.notification.rememberNotificationAnnounceSettings
-import app.smartdisplay.notification.rememberNotificationCenter
-import app.smartdisplay.speech.rememberAnnouncementGate
-import app.smartdisplay.speech.rememberSpeechSpeaker
 import app.smartdisplay.sun.SunClockLead
 import app.smartdisplay.sun.SunEventIcon
 import app.smartdisplay.sun.sunClockLead
@@ -118,6 +108,7 @@ fun ClockScreen() {
     }
 
     val context = LocalContext.current
+    val runtime = remember { KeepAliveRuntime.from(context).ensureStarted() }
     rememberChargingSupplyAlert()
     rememberLinkConnectionAlerts()
     DisposableEffect(context) {
@@ -125,42 +116,21 @@ fun ClockScreen() {
         onDispose { InternetConnectivity.stop() }
     }
     val online by InternetConnectivity.online.collectAsState()
-    val soundPresenceGate = rememberSoundPresenceGate()
-    val effects = rememberEffectPlayer()
-    DisposableEffect(effects, soundPresenceGate) {
-        effects.presenceGate = soundPresenceGate
-        onDispose { effects.presenceGate = null }
-    }
+    val soundPresenceGate = runtime.presenceGate
+    val effects = runtime.effects
     val playTap: () -> Unit = remember(effects) { { effects.playTap() } }
     val playBeep: () -> Unit = remember(effects) { { effects.playBeep() } }
-    val speechSpeaker = rememberSpeechSpeaker()
-    val playbackDucker = remember(context) { LocalPlaybackDucker(context.applicationContext) }
-    val announcementGate = rememberAnnouncementGate { active ->
-        playbackDucker.setDucked(active)
-    }
-    DisposableEffect(playbackDucker) {
-        onDispose { playbackDucker.setDucked(false) }
-    }
-    val jihouSettings = rememberJihouSettings()
-    val notificationAnnounceSettings = rememberNotificationAnnounceSettings()
+    val speechSpeaker = runtime.speechSpeaker
+    val announcementGate = runtime.announcementGate
+    val jihouSettings = runtime.jihouSettings
+    val notificationAnnounceSettings = runtime.notificationAnnounceSettings
     val systemMedia = rememberSystemMedia()
     StartupPermissionRequests(systemMedia)
-    val chimeController = rememberHourlyChimeController(
-        speaker = speechSpeaker,
-        announcementGate = announcementGate,
-        presenceGate = soundPresenceGate,
-        enabled = jihouSettings.enabled,
-    )
-    val notifications = rememberNotificationCenter(
-        speaker = speechSpeaker,
-        effects = effects,
-        announcementGate = announcementGate,
-        presenceGate = soundPresenceGate,
-    )
-    rememberDeviceNotificationAnnouncer(
-        notifications = notifications,
-        settings = notificationAnnounceSettings,
-    )
+    val chimeController = runtime.chimeController
+    LaunchedEffect(chimeController, jihouSettings.enabled) {
+        chimeController.setEnabled(jihouSettings.enabled)
+    }
+    val notifications = runtime.notifications
     val deviceLocation = rememberDeviceLocationHub()
     val deviceCoordinates by deviceLocation.coordinates.collectAsState()
     LaunchedEffect(Unit) {

@@ -24,7 +24,7 @@ private enum class StartupPermissionStep {
 
 /**
  * 初回起動で、使用許可が要るものを続けて出す。
- * カレンダー、通知へのアクセス、Bluetoothの機器名、Wi-Fiのアクセスポイント名、
+ * カレンダー、常駐通知、通知へのアクセス、Bluetoothの機器名、Wi-Fiのアクセスポイント名、
  * 日の出・日の入り用の現在地。
  */
 @Composable
@@ -39,9 +39,16 @@ fun StartupPermissionRequests(systemMedia: SystemMediaHub) {
     var linkPromptDone by remember {
         mutableStateOf(prefs.getBoolean(KeyLinkPrompted, false))
     }
+    var postNotificationsPromptDone by remember {
+        mutableStateOf(prefs.getBoolean(KeyPostNotificationsPrompted, false))
+    }
     fun markLinkPrompted() {
         prefs.edit().putBoolean(KeyLinkPrompted, true).apply()
         linkPromptDone = true
+    }
+    fun markPostNotificationsPrompted() {
+        prefs.edit().putBoolean(KeyPostNotificationsPrompted, true).apply()
+        postNotificationsPromptDone = true
     }
     val settingsLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -54,6 +61,7 @@ fun StartupPermissionRequests(systemMedia: SystemMediaHub) {
         ActivityResultContracts.RequestMultiplePermissions(),
     ) {
         markLinkPrompted()
+        markPostNotificationsPrompted()
         moveTo(prefs, StartupPermissionStep.Notifications) { step = it }
     }
     val linkLauncher = rememberLauncherForActivityResult(
@@ -61,18 +69,25 @@ fun StartupPermissionRequests(systemMedia: SystemMediaHub) {
     ) {
         markLinkPrompted()
     }
+    val postNotificationsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) {
+        markPostNotificationsPrompted()
+    }
 
-    LaunchedEffect(step, linkPromptDone) {
+    LaunchedEffect(step, linkPromptDone, postNotificationsPromptDone) {
         when (step) {
             StartupPermissionStep.Runtime -> {
                 val missing = missingRuntimePermissions(context)
                 if (missing.isEmpty()) {
                     markLinkPrompted()
+                    markPostNotificationsPrompted()
                     moveTo(prefs, StartupPermissionStep.Notifications) { step = it }
                 } else {
                     runCatching { runtimeLauncher.launch(missing) }
                         .onFailure {
                             markLinkPrompted()
+                            markPostNotificationsPrompted()
                             moveTo(prefs, StartupPermissionStep.Notifications) { step = it }
                         }
                 }
@@ -89,6 +104,15 @@ fun StartupPermissionRequests(systemMedia: SystemMediaHub) {
                 }
             }
             StartupPermissionStep.Done -> {
+                if (!postNotificationsPromptDone) {
+                    val missing = missingPostNotificationsPermission(context)
+                    if (missing != null) {
+                        runCatching { postNotificationsLauncher.launch(missing) }
+                            .onFailure { markPostNotificationsPrompted() }
+                        return@LaunchedEffect
+                    }
+                    markPostNotificationsPrompted()
+                }
                 if (linkPromptDone) {
                     return@LaunchedEffect
                 }
@@ -123,8 +147,19 @@ private fun missingRuntimePermissions(context: Context): Array<String> {
     if (!isGranted(context, Manifest.permission.READ_CALENDAR)) {
         names += Manifest.permission.READ_CALENDAR
     }
+    missingPostNotificationsPermission(context)?.let { names += it }
     names += missingLinkPermissions(context)
     return names.toTypedArray()
+}
+
+private fun missingPostNotificationsPermission(context: Context): String? {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+        return null
+    }
+    if (isGranted(context, Manifest.permission.POST_NOTIFICATIONS)) {
+        return null
+    }
+    return Manifest.permission.POST_NOTIFICATIONS
 }
 
 /**
@@ -159,3 +194,4 @@ private fun isGranted(context: Context, permission: String): Boolean {
 private const val PrefsName = "startup_permissions"
 private const val KeyStep = "step"
 private const val KeyLinkPrompted = "link_prompted_v2"
+private const val KeyPostNotificationsPrompted = "post_notifications_prompted"

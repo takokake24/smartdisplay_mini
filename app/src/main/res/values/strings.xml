@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">スマートディスプレイmini</string>
+    <string name="keep_alive_channel_name">時報・通知読み上げ</string>
+    <string name="keep_alive_channel_description">アプリを閉じているあいだも時報と通知読み上げを続けます</string>
+    <string name="keep_alive_title_active">時報・通知読み上げ起動中</string>
+    <string name="keep_alive_title_paused">時報・通知読み上げ休止中</string>
+    <string name="keep_alive_action_enable">ONにする</string>
+    <string name="keep_alive_action_exit">終了</string>
 </resources>
