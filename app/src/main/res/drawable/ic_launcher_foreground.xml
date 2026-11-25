@@ -15,11 +15,19 @@
         android:strokeWidth="3"
         android:strokeColor="#FFFFFF"
         android:strokeLineCap="round" />
-    <!-- 右上の M（フル版との区別用。黒縁で時計と分ける） -->
+    <!-- 右上の M：下に黒縁、上に白本体（線画なので谷も見える） -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M68,48 L68,28 L74.2,40.5 L80.4,28 L80.4,48 L77.2,48 L77.2,35.2 L74.2,41.2 L71.2,35.2 L71.2,48 Z"
-        android:strokeWidth="2.5"
+        android:fillColor="#00000000"
+        android:pathData="M68,48 L68,28 L74,41 L80,28 L80,48"
+        android:strokeWidth="7"
         android:strokeColor="#000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M68,48 L68,28 L74,41 L80,28 L80,48"
+        android:strokeWidth="3.5"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
         android:strokeLineJoin="round" />
 </vector>
