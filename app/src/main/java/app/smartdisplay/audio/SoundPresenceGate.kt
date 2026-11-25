@@ -50,8 +50,8 @@ class SoundPresenceGate(context: Context) {
     private var playbackCallback: AudioManager.AudioPlaybackCallback? = null
 
     /** 通知設定の「外出中も鳴らす」。一時的な上書き。 */
-    var awaySoundEnabled by mutableStateOf(false)
-        private set
+    private var awaySoundEnabledState by mutableStateOf(false)
+    val awaySoundEnabled: Boolean get() = awaySoundEnabledState
 
     var mayPlay by mutableStateOf(true)
         private set
@@ -59,10 +59,10 @@ class SoundPresenceGate(context: Context) {
     fun mayPlayNow(): Boolean = mayPlay
 
     fun setAwaySoundEnabled(value: Boolean) {
-        if (awaySoundEnabled == value) {
+        if (awaySoundEnabledState == value) {
             return
         }
-        awaySoundEnabled = value
+        awaySoundEnabledState = value
         recompute()
     }
 
@@ -79,11 +79,11 @@ class SoundPresenceGate(context: Context) {
 
     fun release() {
         if (!started) {
-            awaySoundEnabled = false
+            awaySoundEnabledState = false
             return
         }
         started = false
-        awaySoundEnabled = false
+        awaySoundEnabledState = false
         wifiCallback?.let { callback ->
             connectivityManager?.runCatching { unregisterNetworkCallback(callback) }
         }
@@ -168,11 +168,11 @@ class SoundPresenceGate(context: Context) {
             return
         }
         val nextNatural = wifiConnected || externalMediaPlaying || bluetoothAudioConnected
-        if (awaySoundEnabled && nextNatural && !naturalAllow) {
-            awaySoundEnabled = false
+        if (awaySoundEnabledState && nextNatural && !naturalAllow) {
+            awaySoundEnabledState = false
         }
         naturalAllow = nextNatural
-        mayPlay = nextNatural || awaySoundEnabled
+        mayPlay = nextNatural || awaySoundEnabledState
     }
 
     private companion object {
