@@ -320,7 +320,7 @@ fun ClockScreen() {
                                 modifier = Modifier
                                     .align(Alignment.TopStart)
                                     .padding(start = 18.dp, top = 16.dp)
-                                    .size(26.dp)
+                                    .size(44.dp)
                                     .clearAndSetSemantics {
                                         contentDescription = "音は鳴りません"
                                     },
