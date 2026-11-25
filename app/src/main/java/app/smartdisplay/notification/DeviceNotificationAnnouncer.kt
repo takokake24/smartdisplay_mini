@@ -30,7 +30,8 @@ import kotlinx.coroutines.launch
 /**
  * 他アプリの新規通知を、右半分のバナーと読み上げに載せる。
  * 読み上げを切っているときは載せない。音の出ない通知は、設定で含めるときだけ載せる。
- * 再生コントロールと、Chrome の「サイトで〜が使用されています」「共有されています」は対象にしない。
+ * 再生コントロールと、Chrome の「サイトで〜が使用されています」「共有されています」、
+ * Spotify の「Spotifyの接続」、Bose の「同期を維持します。」は対象にしない。
  * 音の出る通知は端末の通知音に任せ、こちらでは鳴らさない。
  * 音の出ない通知は共通の通知音を鳴らしてから読む。
  */
@@ -165,7 +166,7 @@ class DeviceNotificationAnnouncer(
             return null
         }
         val (title, body) = titleAndBody(notification)
-        if (isChromeSiteIndicator(sbn.packageName, title, body)) {
+        if (shouldIgnore(sbn.packageName, title, body)) {
             return null
         }
         val appName = appLabel(sbn.packageName)
@@ -201,13 +202,20 @@ class DeviceNotificationAnnouncer(
             return null
         }
         val (title, body) = titleAndBody(notification)
-        if (isChromeSiteIndicator(sbn.packageName, title, body)) {
+        if (shouldIgnore(sbn.packageName, title, body)) {
             return null
         }
         return fingerprint(title, body)
     }
 
     private fun fingerprint(title: String, body: String): String = "$title\n$body"
+
+    private fun shouldIgnore(packageName: String, title: String, body: String): Boolean {
+        if (title in ignoredNoiseTitles) {
+            return true
+        }
+        return isChromeSiteIndicator(packageName, title, body)
+    }
 
     private fun isChromeSiteIndicator(packageName: String, title: String, body: String): Boolean {
         if (!isChromePackage(packageName)) {
@@ -574,6 +582,10 @@ private const val ChromeLegacyPackage = "com.google.android.apps.chrome"
 private const val ChromiumPackage = "org.chromium.chrome"
 private const val ChromeChannelPrefix = "com.chrome."
 private val chromeSiteIndicator = Regex("""サイトで.+が(?:使用|共有)されています""")
+private val ignoredNoiseTitles = setOf(
+    "Spotifyの接続",
+    "同期を維持します。",
+)
 
 private const val FlagSilent = 0x200
 private const val FlagSilentSystem = 1 shl 17
