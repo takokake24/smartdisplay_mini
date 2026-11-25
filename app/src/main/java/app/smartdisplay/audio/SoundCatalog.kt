@@ -64,5 +64,5 @@ private fun clip(resId: Int, title: String, group: String, playbackVolume: Float
     )
 }
 
-private const val ChimeVolume = 0.72f
+private const val ChimeVolume = 0.90f
 private const val EffectVolume = 1f

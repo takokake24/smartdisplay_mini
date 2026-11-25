@@ -869,10 +869,10 @@ class HourlyChimeController(
         /** イントロを鳴らす最低残り時間（これ未満なら省略） */
         const val MinAudibleIntroMs = 800L
         /** 通常時の時報メロディ音量（他の効果音より少し控えめ） */
-        const val NormalVolume = 0.72f
+        const val NormalVolume = 0.90f
         /** 通知読み上げ中の時報メロディ音量 */
         const val DuckVolume = 0.16f
         /** 時報の時刻読み上げ音量 */
-        const val SpeechVolume = 0.78f
+        const val SpeechVolume = 0.94f
     }
 }
