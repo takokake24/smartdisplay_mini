@@ -39,6 +39,7 @@ private fun knownClips(): List<SoundClip> {
         clip(R.raw.tap, "タップ", "効果音", EffectVolume),
         clip(R.raw.beep, "ビープ", "効果音", EffectVolume),
         clip(R.raw.notice, "通知", "効果音", EffectVolume),
+        clip(R.raw.battery, "電池残量", "効果音", EffectVolume),
         clip(R.raw.jihou_normal_1, "通常 0分", "時報", ChimeVolume),
         clip(R.raw.jihou_normal_2, "通常 15分", "時報", ChimeVolume),
         clip(R.raw.jihou_normal_3, "通常 30分", "時報", ChimeVolume),

@@ -80,6 +80,8 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import app.smartdisplay.audio.SoundPresenceGate
 import app.smartdisplay.audio.SoundTestPage
+import app.smartdisplay.battery.BatteryAnnounceMode
+import app.smartdisplay.battery.BatteryAnnounceSettings
 import app.smartdisplay.calendar.CalendarDaySections
 import app.smartdisplay.calendar.CalendarEvent
 import app.smartdisplay.calendar.CalendarRepository
@@ -133,6 +135,7 @@ fun MenuScreen(
     now: LocalDateTime,
     jihouSettings: JihouSettings,
     notificationAnnounceSettings: NotificationAnnounceSettings,
+    batteryAnnounceSettings: BatteryAnnounceSettings,
     soundPresenceGate: SoundPresenceGate,
     chimeController: HourlyChimeController,
     announcementGate: AnnouncementGate,
@@ -285,6 +288,7 @@ fun MenuScreen(
             }
             MenuPage.Settings -> SettingsContent(
                 notificationAnnounceSettings = notificationAnnounceSettings,
+                batteryAnnounceSettings = batteryAnnounceSettings,
                 jihouSettings = jihouSettings,
                 onOpenNotificationSettings = {
                     onTapSound()
@@ -328,6 +332,7 @@ fun MenuScreen(
             )
             MenuPage.NotificationSettings -> NotificationSettingsContent(
                 settings = notificationAnnounceSettings,
+                batteryAnnounceSettings = batteryAnnounceSettings,
                 soundPresenceGate = soundPresenceGate,
                 onTapSound = onTapSound,
                 modifier = Modifier
@@ -756,6 +761,7 @@ private fun HomeMenuTile(
 @Composable
 private fun SettingsContent(
     notificationAnnounceSettings: NotificationAnnounceSettings,
+    batteryAnnounceSettings: BatteryAnnounceSettings,
     jihouSettings: JihouSettings,
     onOpenNotificationSettings: () -> Unit,
     onOpenJihouSettings: () -> Unit,
@@ -765,11 +771,13 @@ private fun SettingsContent(
     modifier: Modifier = Modifier,
 ) {
     val speech = if (notificationAnnounceSettings.speechEnabled) "読み上げオン" else "読み上げオフ"
-    val notificationSubtitle = if (notificationAnnounceSettings.includeSilent) {
-        "$speech・サイレントも"
-    } else {
-        speech
+    val silent = if (notificationAnnounceSettings.includeSilent) "・サイレントも" else ""
+    val battery = when (batteryAnnounceSettings.mode) {
+        BatteryAnnounceMode.Always -> "・電池は常に"
+        BatteryAnnounceMode.Resident -> "・電池は常駐時"
+        BatteryAnnounceMode.Off -> "・電池オフ"
     }
+    val notificationSubtitle = "$speech$silent$battery"
     MenuSubpageColumn(title = "設定", modifier = modifier) {
         SettingsItem(
             title = "通知設定",
@@ -1243,6 +1251,7 @@ private fun CalendarEventRow(
 @Composable
 private fun NotificationSettingsContent(
     settings: NotificationAnnounceSettings,
+    batteryAnnounceSettings: BatteryAnnounceSettings,
     soundPresenceGate: SoundPresenceGate,
     onTapSound: () -> Unit,
     modifier: Modifier = Modifier,
@@ -1287,6 +1296,38 @@ private fun NotificationSettingsContent(
             onCheckedChange = { enabled ->
                 onTapSound()
                 soundPresenceGate.setAwaySoundEnabled(enabled)
+            },
+        )
+        Text(
+            text = "電池残量読み上げ",
+            color = Color.White.copy(alpha = 0.65f),
+            fontSize = 18.sp,
+            modifier = Modifier.padding(top = 12.dp),
+        )
+        SettingsItem(
+            title = "常に",
+            subtitle = "起動中・常駐時どちらでも読み上げる",
+            selected = batteryAnnounceSettings.mode == BatteryAnnounceMode.Always,
+            onClick = {
+                onTapSound()
+                batteryAnnounceSettings.updateMode(BatteryAnnounceMode.Always)
+            },
+        )
+        SettingsItem(
+            title = "常駐時",
+            subtitle = "アプリが画面に出ていないときだけ読み上げる",
+            selected = batteryAnnounceSettings.mode == BatteryAnnounceMode.Resident,
+            onClick = {
+                onTapSound()
+                batteryAnnounceSettings.updateMode(BatteryAnnounceMode.Resident)
+            },
+        )
+        SettingsItem(
+            title = "オフ",
+            selected = batteryAnnounceSettings.mode == BatteryAnnounceMode.Off,
+            onClick = {
+                onTapSound()
+                batteryAnnounceSettings.updateMode(BatteryAnnounceMode.Off)
             },
         )
     }

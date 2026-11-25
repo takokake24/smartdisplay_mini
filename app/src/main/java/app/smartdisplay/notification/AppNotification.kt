@@ -7,6 +7,7 @@ enum class NotificationSoundEffect {
     None,
     Notice,
     Beep,
+    Battery,
 }
 
 data class AppNotification(
@@ -22,6 +23,8 @@ data class AppNotification(
     val sourceLabel: String = "",
     /** この時刻（elapsedRealtime）まで、読み上げを始めない。0 なら待たない。 */
     val speakNotBeforeElapsed: Long = 0L,
+    /** false のときはバナーを出さず、音声だけ待ち列に載せる。 */
+    val showBanner: Boolean = true,
 )
 
 const val NotificationCategoryGeneral = "general"

@@ -124,6 +124,7 @@ fun ClockScreen() {
     val announcementGate = runtime.announcementGate
     val jihouSettings = runtime.jihouSettings
     val notificationAnnounceSettings = runtime.notificationAnnounceSettings
+    val batteryAnnounceSettings = runtime.batteryAnnounceSettings
     val systemMedia = rememberSystemMedia()
     StartupPermissionRequests(systemMedia)
     val chimeController = runtime.chimeController
@@ -219,6 +220,7 @@ fun ClockScreen() {
                     now = now,
                     jihouSettings = jihouSettings,
                     notificationAnnounceSettings = notificationAnnounceSettings,
+                    batteryAnnounceSettings = batteryAnnounceSettings,
                     soundPresenceGate = soundPresenceGate,
                     chimeController = chimeController,
                     announcementGate = announcementGate,

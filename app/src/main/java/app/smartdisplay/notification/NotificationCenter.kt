@@ -67,6 +67,7 @@ class NotificationCenter(
         appIcon: Bitmap? = null,
         sourceLabel: String = "",
         speakNotBeforeElapsed: Long = 0L,
+        showBanner: Boolean = true,
     ): String {
         val item = AppNotification(
             id = UUID.randomUUID().toString(),
@@ -80,6 +81,7 @@ class NotificationCenter(
             appIcon = appIcon,
             sourceLabel = sourceLabel,
             speakNotBeforeElapsed = speakNotBeforeElapsed,
+            showBanner = showBanner,
         )
         if (!alert) {
             return item.id
@@ -89,8 +91,10 @@ class NotificationCenter(
             return item.id
         }
         pendingAlerts.addLast(item)
-        expandBatchTotalForPending()
-        refreshPresentationProgress()
+        if (showBanner) {
+            expandBatchTotalForPending()
+            refreshPresentationProgress()
+        }
         ensurePresenting()
         return item.id
     }
@@ -157,22 +161,29 @@ class NotificationCenter(
         }
         if (_presentation.value == null) {
             batchPresented = 0
-            batchTotal = pendingAlerts.size
+            batchTotal = pendingAlerts.count { it.showBanner }
         }
         presentingJob = scope.launch {
             try {
                 while (true) {
                     val current = pendingAlerts.removeFirstOrNull() ?: break
-                    batchPresented += 1
-                    batchTotal = max(batchTotal, batchPresented + pendingAlerts.size)
-                    showBanner(current)
+                    if (current.showBanner) {
+                        batchPresented += 1
+                        batchTotal = max(
+                            batchTotal,
+                            batchPresented + pendingAlerts.count { it.showBanner },
+                        )
+                        showBanner(current)
+                    }
                     // 時報鳴動中に来た通知は表示だけ先に出し、読み上げは時報一連の後
                     announcementGate.awaitChimeSequenceIdle()
-                    // 端末側の通知音が鳴り終わるまで読み上げを始めない
+                    // 端末側の通知音／充電音が鳴り終わるまで読み上げを始めない
                     awaitExternalSound(current)
                     announcementGate.awaitChimeSequenceIdle()
                     // 表示の1分タイムアウトは、読み上げ処理の開始時点から数える
-                    startAutoDismiss(current.id)
+                    if (current.showBanner) {
+                        startAutoDismiss(current.id)
+                    }
                     val speak = !current.skipSpeech && current.speechText.isNotBlank()
                     val audible = presenceGate?.mayPlayNow() != false
                     if (audible && (speak || current.soundEffect != NotificationSoundEffect.None)) {
@@ -187,6 +198,9 @@ class NotificationCenter(
                                 }
                                 NotificationSoundEffect.Beep -> {
                                     runCatching { effects.playBeepAndAwait() }
+                                }
+                                NotificationSoundEffect.Battery -> {
+                                    runCatching { effects.playBattery() }
                                 }
                             }
                             if (!speak || !announcementGate.shouldContinueSpeech()) {
@@ -251,7 +265,8 @@ class NotificationCenter(
 
     private fun expandBatchTotalForPending() {
         val shown = if (_presentation.value != null) batchPresented else 0
-        batchTotal = max(batchTotal, shown + pendingAlerts.size)
+        val pendingBanners = pendingAlerts.count { it.showBanner }
+        batchTotal = max(batchTotal, shown + pendingBanners)
     }
 
     private fun refreshPresentationProgress() {

@@ -100,6 +100,13 @@ class EffectPlayer(context: Context) {
         playRawAndAwait(R.raw.notice)
     }
 
+    suspend fun playBattery() {
+        if (!mayPlay()) {
+            return
+        }
+        playRawAndAwait(R.raw.battery)
+    }
+
     private suspend fun playRawAndAwait(resId: Int) {
         mutex.withLock {
             withContext(Dispatchers.Main) {

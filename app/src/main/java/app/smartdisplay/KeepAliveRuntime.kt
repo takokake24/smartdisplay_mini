@@ -5,6 +5,8 @@ import android.content.Context
 import app.smartdisplay.audio.EffectPlayer
 import app.smartdisplay.audio.LocalPlaybackDucker
 import app.smartdisplay.audio.SoundPresenceGate
+import app.smartdisplay.battery.BatteryAnnounceSettings
+import app.smartdisplay.battery.BatteryAnnouncer
 import app.smartdisplay.jihou.HourlyChimeController
 import app.smartdisplay.jihou.JihouSettings
 import app.smartdisplay.notification.DeviceNotificationAnnouncer
@@ -36,6 +38,8 @@ class KeepAliveRuntime(private val app: Application) {
         private set
     lateinit var notificationAnnounceSettings: NotificationAnnounceSettings
         private set
+    lateinit var batteryAnnounceSettings: BatteryAnnounceSettings
+        private set
     lateinit var chimeController: HourlyChimeController
         private set
     lateinit var notifications: NotificationCenter
@@ -43,6 +47,7 @@ class KeepAliveRuntime(private val app: Application) {
 
     private lateinit var playbackDucker: LocalPlaybackDucker
     private lateinit var deviceAnnouncer: DeviceNotificationAnnouncer
+    private lateinit var batteryAnnouncer: BatteryAnnouncer
 
     fun ensureStarted(): KeepAliveRuntime {
         synchronized(lock) {
@@ -59,6 +64,7 @@ class KeepAliveRuntime(private val app: Application) {
             speechSpeaker = SpeechSpeaker(app)
             jihouSettings = JihouSettings(app)
             notificationAnnounceSettings = NotificationAnnounceSettings(app)
+            batteryAnnounceSettings = BatteryAnnounceSettings(app)
             chimeController = HourlyChimeController(
                 context = app,
                 speaker = speechSpeaker,
@@ -77,6 +83,12 @@ class KeepAliveRuntime(private val app: Application) {
                 notifications = notifications,
                 settings = notificationAnnounceSettings,
             )
+            batteryAnnouncer = BatteryAnnouncer(
+                context = app,
+                notifications = notifications,
+                settings = batteryAnnounceSettings,
+                isResident = { notificationVisible && !exiting },
+            )
             presenceGate.setOnMayPlayChanged { mayPlay ->
                 if (notificationVisible && !exiting) {
                     KeepAliveService.refresh(app, mayPlay)
@@ -88,6 +100,7 @@ class KeepAliveRuntime(private val app: Application) {
             presenceGate.start()
             chimeController.start()
             deviceAnnouncer.start()
+            batteryAnnouncer.start()
             started = true
         }
         return this
@@ -148,6 +161,7 @@ class KeepAliveRuntime(private val app: Application) {
                 return
             }
             started = false
+            runCatching { batteryAnnouncer.stop() }
             runCatching { deviceAnnouncer.stop() }
             runCatching { chimeController.release() }
             runCatching { notifications.release() }
