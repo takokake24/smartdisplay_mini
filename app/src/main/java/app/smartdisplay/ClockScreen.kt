@@ -45,7 +45,9 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -94,6 +96,7 @@ import app.smartdisplay.util.AppToastHost
 import app.smartdisplay.util.InternetConnectivity
 import app.smartdisplay.util.millisUntilNextCacheMaintenance
 import app.smartdisplay.util.pruneAppCaches
+import app.smartdisplay.util.rememberDeviceLocationHub
 import kotlinx.coroutines.delay
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -158,6 +161,8 @@ fun ClockScreen() {
         notifications = notifications,
         settings = notificationAnnounceSettings,
     )
+    val deviceLocation = rememberDeviceLocationHub()
+    val deviceCoordinates by deviceLocation.coordinates.collectAsState()
     LaunchedEffect(Unit) {
         while (true) {
             delay(millisUntilNextCacheMaintenance())
@@ -268,38 +273,60 @@ fun ClockScreen() {
                         showConnectionBanner -> connectionNotification
                         else -> null
                     }
-                    val todaySun = remember(now.toLocalDate()) { sunTimesFor(now.toLocalDate()) }
-                    ClockFace(
-                        dateTime = now,
-                        nowPlayingTitle = nowPlaying?.title,
-                        nowPlayingArtwork = nowPlaying?.artwork,
-                        nowPlayingProgress = nowPlaying?.progress,
-                        sunrise = todaySun?.sunrise,
-                        sunset = todaySun?.sunset,
-                        onNowPlayingClick = {
-                            playTap()
-                            interactionToken = 0
-                            openMenuOnMedia = true
-                            showMenu = true
-                        },
+                    val todaySun = remember(now.toLocalDate(), deviceCoordinates) {
+                        sunTimesFor(
+                            date = now.toLocalDate(),
+                            latitudeDegrees = deviceCoordinates?.latitude,
+                            longitudeDegrees = deviceCoordinates?.longitude,
+                        )
+                    }
+                    Box(
                         modifier = Modifier
                             .width(contentWidth)
-                            .fillMaxHeight()
-                            .background(Color.Black)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = {
-                                    playTap()
-                                    if (showRegularBanner) {
-                                        notifications.dismissActiveManually()
-                                    }
-                                    interactionToken = 0
-                                    openMenuOnMedia = false
-                                    showMenu = true
-                                },
-                            ),
-                    )
+                            .fillMaxHeight(),
+                    ) {
+                        ClockFace(
+                            dateTime = now,
+                            nowPlayingTitle = nowPlaying?.title,
+                            nowPlayingArtwork = nowPlaying?.artwork,
+                            nowPlayingProgress = nowPlaying?.progress,
+                            sunrise = todaySun?.sunrise,
+                            sunset = todaySun?.sunset,
+                            onNowPlayingClick = {
+                                playTap()
+                                interactionToken = 0
+                                openMenuOnMedia = true
+                                showMenu = true
+                            },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = {
+                                        playTap()
+                                        if (showRegularBanner) {
+                                            notifications.dismissActiveManually()
+                                        }
+                                        interactionToken = 0
+                                        openMenuOnMedia = false
+                                        showMenu = true
+                                    },
+                                ),
+                        )
+                        if (!soundPresenceGate.mayPlay) {
+                            SoundMutedIndicator(
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .padding(start = 18.dp, top = 16.dp)
+                                    .size(26.dp)
+                                    .clearAndSetSemantics {
+                                        contentDescription = "音は鳴りません"
+                                    },
+                            )
+                        }
+                    }
                     Box(
                         modifier = Modifier
                             .align(Alignment.CenterEnd)
@@ -345,6 +372,45 @@ private fun ImmersiveDisplay() {
         onDispose {
             showSystemBars(activity)
         }
+    }
+}
+
+/** 外出抑制で音が出ないときの控えめな表示。 */
+@Composable
+private fun SoundMutedIndicator(
+    modifier: Modifier = Modifier,
+) {
+    val color = Color.White.copy(alpha = 0.28f)
+    Canvas(modifier = modifier) {
+        val stroke = Stroke(
+            width = size.minDimension * 0.09f,
+            cap = StrokeCap.Round,
+        )
+        val bodyLeft = size.width * 0.12f
+        val bodyRight = size.width * 0.38f
+        val bodyTop = size.height * 0.34f
+        val bodyBottom = size.height * 0.66f
+        val coneTipX = size.width * 0.58f
+        val coneTop = size.height * 0.18f
+        val coneBottom = size.height * 0.82f
+        val speaker = Path().apply {
+            moveTo(bodyLeft, bodyTop)
+            lineTo(bodyRight, bodyTop)
+            lineTo(coneTipX, coneTop)
+            lineTo(coneTipX, coneBottom)
+            lineTo(bodyRight, bodyBottom)
+            lineTo(bodyLeft, bodyBottom)
+            close()
+        }
+        drawPath(path = speaker, color = color)
+        val slashPad = size.minDimension * 0.12f
+        drawLine(
+            color = color,
+            start = Offset(slashPad, size.height - slashPad),
+            end = Offset(size.width - slashPad, slashPad),
+            strokeWidth = stroke.width,
+            cap = StrokeCap.Round,
+        )
     }
 }
 

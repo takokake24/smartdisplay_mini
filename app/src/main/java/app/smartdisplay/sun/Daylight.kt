@@ -3,6 +3,7 @@ package app.smartdisplay.sun
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import kotlin.math.acos
 import kotlin.math.cos
@@ -16,11 +17,19 @@ data class SunTimes(
 )
 
 /**
- * 小平市の日の出・日の入り（日本標準時）を、日付から計算する。
+ * 指定位置の日の出・日の入りを、端末のタイムゾーンで計算する。
  * NOAA の近似式。通信は使わず、表示用に分単位で足りる精度。
+ * 緯度経度が無いときは小平市役所付近を使う。
  */
-fun sunTimesFor(date: LocalDate): SunTimes? {
-    val latitude = Math.toRadians(Latitude)
+fun sunTimesFor(
+    date: LocalDate,
+    latitudeDegrees: Double? = null,
+    longitudeDegrees: Double? = null,
+    zoneId: ZoneId = ZoneId.systemDefault(),
+): SunTimes? {
+    val latitudeDeg = latitudeDegrees ?: FallbackLatitude
+    val longitudeDeg = longitudeDegrees ?: FallbackLongitude
+    val latitude = Math.toRadians(latitudeDeg)
     val gamma = 2.0 * Math.PI / daysInYear(date) * (date.dayOfYear - 1)
     val equationOfTime = 229.18 * (
         0.000075 +
@@ -43,8 +52,11 @@ fun sunTimesFor(date: LocalDate): SunTimes? {
         return null
     }
     val hourAngle = Math.toDegrees(acos(cosHourAngle))
-    val sunriseMinutes = 720.0 - 4.0 * (Longitude + hourAngle) - equationOfTime + JstOffsetMinutes
-    val sunsetMinutes = 720.0 - 4.0 * (Longitude - hourAngle) - equationOfTime + JstOffsetMinutes
+    val zoneOffsetMinutes = zoneId.rules
+        .getOffset(date.atTime(12, 0).atZone(zoneId).toInstant())
+        .totalSeconds / 60.0
+    val sunriseMinutes = 720.0 - 4.0 * (longitudeDeg + hourAngle) - equationOfTime + zoneOffsetMinutes
+    val sunsetMinutes = 720.0 - 4.0 * (longitudeDeg - hourAngle) - equationOfTime + zoneOffsetMinutes
     return SunTimes(
         sunrise = minutesToTime(sunriseMinutes),
         sunset = minutesToTime(sunsetMinutes),
@@ -87,11 +99,10 @@ private fun daysInYear(date: LocalDate): Int = if (date.isLeapYear) 366 else 365
 
 private const val SunClockLeadMinutes = 90L
 
-/** 小平市役所付近。 */
-private const val Latitude = 35.7285
-private const val Longitude = 139.4777
+/** 現在地が取れないときの控え（小平市役所付近）。 */
+private const val FallbackLatitude = 35.7285
+private const val FallbackLongitude = 139.4777
 
 /** 日の出・日の入りの天頂角（大気差と太陽半径を含む）。 */
 private const val SunriseZenithDegrees = 90.833
-private const val JstOffsetMinutes = 540.0
 private const val MinutesPerDay = 1440.0

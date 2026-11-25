@@ -24,7 +24,8 @@ private enum class StartupPermissionStep {
 
 /**
  * 初回起動で、使用許可が要るものを続けて出す。
- * カレンダー、通知へのアクセス、Bluetoothの機器名、Wi-Fiのアクセスポイント名。
+ * カレンダー、通知へのアクセス、Bluetoothの機器名、Wi-Fiのアクセスポイント名、
+ * 日の出・日の入り用の現在地。
  */
 @Composable
 fun StartupPermissionRequests(systemMedia: SystemMediaHub) {
@@ -127,7 +128,7 @@ private fun missingRuntimePermissions(context: Context): Array<String> {
 }
 
 /**
- * Bluetoothの機器名と、Wi-Fiのアクセスポイント名を読む許可。
+ * Bluetoothの機器名、Wi-Fiのアクセスポイント名、日の出・日の入りの現在地を読む許可。
  * すでに起動案内が終わっている端末にも、一度だけ出す。
  */
 private fun missingLinkPermissions(context: Context): List<String> {
@@ -144,7 +145,7 @@ private fun missingLinkPermissions(context: Context): List<String> {
     ) {
         names += Manifest.permission.NEARBY_WIFI_DEVICES
     }
-    // WifiInfo の SSID は getScanResults と同じく位置情報が要る（Android 13 以降も）。
+    // WifiInfo の SSID と、日の出・日の入りの現在地に使う。
     if (!isGranted(context, Manifest.permission.ACCESS_FINE_LOCATION)) {
         names += Manifest.permission.ACCESS_FINE_LOCATION
     }
