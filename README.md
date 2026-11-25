@@ -1,6 +1,6 @@
-# smartdisplay mini
+# スマートディスプレイmini
 
-横向き全画面の Android スマートディスプレイ。常時表示のデジタル時計を中心に、時報・他アプリの通知・メディア操作・SwitchBot の機器操作だけに絞った小さな構成。
+横向き全画面の Android スマートディスプレイ。常時表示のデジタル時計を中心に、時報・他アプリの通知・メディア操作・SwitchBot の機器操作だけに絞った小さな構成。ランチャー名は「スマートディスプレイmini」、アイコンは時計の右上に「M」を重ねている。
 
 Android Studio でこのフォルダを開く。SwitchBot を使うときは `local.properties` に `switchbot.token` と `switchbot.secret` を書く。
 
