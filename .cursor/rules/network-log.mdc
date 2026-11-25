@@ -1,0 +1,21 @@
+---
+description: 外部HTTP通信は必ず通信ログ（NetworkLog）に記録する
+globs: app/src/main/java/app/smartdisplay/**/*.kt
+alwaysApply: false
+---
+
+# 外部通信は NetworkLog に記録する
+
+`HttpURLConnection` / `URL.openConnection` など、アプリ外とのネットワーク通信を追加・変更するときは、必ず `NetworkLog.trace(url) { ... }` で包む。
+
+- 入口は `app.smartdisplay.util.NetworkLog`
+- 引数は生の URL 文字列（表示用ホスト／パスと分類は `NetworkLog` 内で解決する）
+- 成功・失敗どちらも完了時に1件だけ記録される（開始と終了で二重に登録しない）
+- 新しい通信先を足す場合は、`networkCategory(url)` に分類（バス／天気／運行情報／気象警報／地震／機器）を追加する
+- 通信ログ画面（設定 → 通信ログ）に載らない通信を残さない
+
+```kotlin
+private fun download(url: String): String = NetworkLog.trace(url) {
+    // 既存の HTTP 処理
+}
+```
