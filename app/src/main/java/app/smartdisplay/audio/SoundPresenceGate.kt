@@ -1,7 +1,10 @@
 package app.smartdisplay.audio
 
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothA2dp
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothClass
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothHeadset
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
@@ -38,7 +41,7 @@ import app.smartdisplay.media.MediaNotificationListener
  * 鳴らす条件は次のいずれか。
  * - Wi-Fi接続中
  * - 他アプリのメディア再生中（音を出してよい環境とみなす）
- * - Bluetoothのイヤホン／ヘッドホン／スピーカー接続中
+ * - Bluetoothのイヤホン／ヘッドホン／スピーカー接続中（スマートウォッチなどは対象外）
  * - 「外出中も鳴らす」が一時ON
  *
  * 「外出中も鳴らす」はメモリのみ。Wi-Fi・メディア・Bluetooth音声のいずれかが
@@ -229,29 +232,61 @@ class SoundPresenceGate(context: Context) {
     }
 
     private fun bluetoothAudioConnectedNow(): Boolean {
-        if (hasBluetoothAudioOutput()) {
-            return true
-        }
-        return bluetoothProfileAudioConnected()
-    }
-
-    private fun hasBluetoothAudioOutput(): Boolean {
-        val manager = audioManager ?: return false
-        return manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).any { device ->
-            isBluetoothAudioType(device.type)
-        }
-    }
-
-    private fun bluetoothProfileAudioConnected(): Boolean {
         val adapter = appContext.getSystemService(BluetoothManager::class.java)?.adapter
-            ?: return false
-        if (!adapter.isEnabled) {
+        if (adapter == null || !adapter.isEnabled) {
             return false
         }
-        return audioBluetoothProfiles().any { profile ->
-            runCatching {
-                adapter.getProfileConnectionState(profile) == BluetoothAdapter.STATE_CONNECTED
-            }.getOrDefault(false)
+        val audio = audioManager
+        if (audio != null) {
+            val matched = audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS).any { info ->
+                isAllowedBluetoothAudioOutput(info, adapter)
+            }
+            if (matched) {
+                return true
+            }
+        }
+        return connectedHeadsetOrSpeakerDevices().any { isHeadphoneOrSpeakerDevice(it) }
+    }
+
+    private fun isAllowedBluetoothAudioOutput(
+        info: AudioDeviceInfo,
+        adapter: BluetoothAdapter,
+    ): Boolean {
+        if (!isBluetoothAudioOutputType(info.type)) {
+            return false
+        }
+        // BLEスピーカーは機器種が取れるとは限らないので、型だけで許可する
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            info.type == AudioDeviceInfo.TYPE_BLE_SPEAKER
+        ) {
+            return true
+        }
+        val device = bluetoothDeviceForOutput(info, adapter) ?: return false
+        return isHeadphoneOrSpeakerDevice(device)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun bluetoothDeviceForOutput(
+        info: AudioDeviceInfo,
+        adapter: BluetoothAdapter,
+    ): BluetoothDevice? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            return null
+        }
+        val address = info.address?.trim().orEmpty()
+        if (address.isEmpty() || address == "00:00:00:00:00:00") {
+            return null
+        }
+        return runCatching { adapter.getRemoteDevice(address) }.getOrNull()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun connectedHeadsetOrSpeakerDevices(): List<BluetoothDevice> {
+        val manager = appContext.getSystemService(BluetoothManager::class.java) ?: return emptyList()
+        return audioBluetoothProfiles().flatMap { profile ->
+            runCatching { manager.getConnectedDevices(profile) }.getOrDefault(emptyList())
+        }.distinctBy { device ->
+            runCatching { device.address }.getOrNull().orEmpty()
         }
     }
 
@@ -276,38 +311,50 @@ class SoundPresenceGate(context: Context) {
                 BluetoothProfile.A2DP,
                 BluetoothProfile.HEADSET,
             )
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                profiles += BluetoothProfile.HEARING_AID
-            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 profiles += BluetoothProfile.LE_AUDIO
             }
             return profiles
         }
 
-        fun isBluetoothAudioType(type: Int): Boolean {
+        fun isBluetoothAudioOutputType(type: Int): Boolean {
             return when (type) {
                 AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
                 AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
                 AudioDeviceInfo.TYPE_BLE_HEADSET,
                 -> true
                 else -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
                         type == AudioDeviceInfo.TYPE_BLE_SPEAKER
-                    ) {
-                        true
-                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                        type == AudioDeviceInfo.TYPE_BLE_BROADCAST
-                    ) {
-                        true
-                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
-                        type == AudioDeviceInfo.TYPE_HEARING_AID
-                    ) {
-                        true
-                    } else {
-                        false
-                    }
                 }
+            }
+        }
+
+        /**
+         * イヤホン・ヘッドホン・スピーカーのみ。
+         * スマートウォッチ（Major.WEARABLE）やカメラ類は除外する。
+         */
+        @SuppressLint("MissingPermission")
+        fun isHeadphoneOrSpeakerDevice(device: BluetoothDevice): Boolean {
+            val btClass = runCatching { device.bluetoothClass }.getOrNull() ?: return false
+            if (btClass.majorDeviceClass == BluetoothClass.Device.Major.WEARABLE) {
+                return false
+            }
+            if (btClass.majorDeviceClass != BluetoothClass.Device.Major.AUDIO_VIDEO) {
+                return false
+            }
+            return when (btClass.deviceClass) {
+                BluetoothClass.Device.AUDIO_VIDEO_HEADPHONES,
+                BluetoothClass.Device.AUDIO_VIDEO_HANDSFREE,
+                BluetoothClass.Device.AUDIO_VIDEO_LOUDSPEAKER,
+                BluetoothClass.Device.AUDIO_VIDEO_PORTABLE_AUDIO,
+                BluetoothClass.Device.AUDIO_VIDEO_HIFI_AUDIO,
+                BluetoothClass.Device.AUDIO_VIDEO_CAR_AUDIO,
+                BluetoothClass.Device.AUDIO_VIDEO_WEARABLE_HEADSET,
+                BluetoothClass.Device.AUDIO_VIDEO_UNCATEGORIZED,
+                BluetoothClass.Device.Major.AUDIO_VIDEO,
+                -> true
+                else -> false
             }
         }
 
