@@ -9,17 +9,8 @@ import java.time.LocalDateTime
 import java.util.concurrent.atomic.AtomicLong
 
 enum class NetworkLogCategory(val label: String) {
-    Bus("バス"),
-    Weather("天気"),
-    Transit("運行情報"),
-    Train("鉄道"),
-    WeatherWarning("気象警報"),
-    Earthquake("地震"),
     SwitchBot("機器"),
-    Spotify("音楽"),
-    Memorial("記念日"),
-    Quote("格言"),
-    Expiration("賞味期限"),
+    Other("その他"),
 }
 
 data class NetworkLogEntry(
@@ -150,22 +141,8 @@ fun networkDestination(url: String): String {
 
 fun networkCategory(url: String): NetworkLogCategory {
     val host = runCatching { URI(url).host.orEmpty().lowercase() }.getOrDefault("")
-    val lower = url.lowercase()
     return when {
-        host.contains("p2pquake") -> NetworkLogCategory.Earthquake
-        host.contains("jma.go.jp") -> NetworkLogCategory.WeatherWarning
-        host.contains("open-meteo") -> NetworkLogCategory.Weather
         host.contains("switch-bot.com") -> NetworkLogCategory.SwitchBot
-        host == "api.spotify.com" || host == "accounts.spotify.com" ||
-            host.endsWith(".scdn.co") || host.endsWith(".spotifycdn.com") -> NetworkLogCategory.Spotify
-        host.contains("yahoo") && lower.contains("diainfo") -> NetworkLogCategory.Transit
-        host.contains("yahoo") && lower.contains("timetable") -> NetworkLogCategory.Train
-        host.contains("kinenbi.gr.jp") -> NetworkLogCategory.Memorial
-        host.contains("doodlenote.net") -> NetworkLogCategory.Quote
-        host.contains("expiration.takokake.com") -> NetworkLogCategory.Expiration
-        host.contains("navitime") || host.contains("transfer-cloud") ||
-            host.contains("transfer.navitime") || host.contains("limousinebus") ||
-            host.contains("bushikaku") -> NetworkLogCategory.Bus
-        else -> NetworkLogCategory.Bus
+        else -> NetworkLogCategory.Other
     }
 }

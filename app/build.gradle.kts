@@ -33,9 +33,6 @@ android {
         versionName = "1.0"
         buildConfigField("String", "SWITCHBOT_TOKEN", localProperty("switchbot.token"))
         buildConfigField("String", "SWITCHBOT_SECRET", localProperty("switchbot.secret"))
-        buildConfigField("String", "SPOTIFY_CLIENT_ID", localProperty("spotify.client.id"))
-        buildConfigField("String", "EXPIRATION_LOGIN_ID", localProperty("expiration.login.id"))
-        buildConfigField("String", "EXPIRATION_PASSWORD", localProperty("expiration.password"))
     }
 
     buildTypes {
@@ -68,6 +65,5 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
-    implementation(libs.androidx.health.connect)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

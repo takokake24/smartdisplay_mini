@@ -74,21 +74,6 @@ class CalendarRepository(
             calendarIds = calendarIds,
             rangeStart = rangeStart,
             rangeEnd = rangeEnd,
-            skipCancelledOrDeclined = false,
-        )
-    }
-
-    /** 直前通知用。キャンセル済みと欠席は含めない。 */
-    fun loadSoonEvents(
-        calendarIds: Set<Long>,
-        rangeStart: LocalDateTime,
-        rangeEnd: LocalDateTime,
-    ): List<CalendarEvent> {
-        return queryEvents(
-            calendarIds = calendarIds,
-            rangeStart = rangeStart,
-            rangeEnd = rangeEnd,
-            skipCancelledOrDeclined = true,
         )
     }
 
@@ -96,7 +81,6 @@ class CalendarRepository(
         calendarIds: Set<Long>,
         rangeStart: LocalDateTime,
         rangeEnd: LocalDateTime,
-        skipCancelledOrDeclined: Boolean,
     ): List<CalendarEvent> {
         if (!hasPermission() || calendarIds.isEmpty()) {
             return emptyList()
@@ -117,24 +101,7 @@ class CalendarRepository(
             .appendPath(startMillis.toString())
             .appendPath(endMillis.toString())
             .build()
-        val selection = buildString {
-            append("${CalendarContract.Instances.CALENDAR_ID} IN (${calendarIds.joinToString(",")})")
-            if (skipCancelledOrDeclined) {
-                append(" AND (")
-                append(CalendarContract.Instances.STATUS)
-                append(" IS NULL OR ")
-                append(CalendarContract.Instances.STATUS)
-                append(" != ")
-                append(CalendarContract.Events.STATUS_CANCELED)
-                append(") AND (")
-                append(CalendarContract.Instances.SELF_ATTENDEE_STATUS)
-                append(" IS NULL OR ")
-                append(CalendarContract.Instances.SELF_ATTENDEE_STATUS)
-                append(" != ")
-                append(CalendarContract.Attendees.ATTENDEE_STATUS_DECLINED)
-                append(")")
-            }
-        }
+        val selection = "${CalendarContract.Instances.CALENDAR_ID} IN (${calendarIds.joinToString(",")})"
         val events = mutableListOf<CalendarEvent>()
         resolver.query(
             uri,
@@ -196,33 +163,6 @@ class CalendarRepository(
             tomorrow = tomorrowEvents,
             weekAhead = weekAhead,
         )
-    }
-
-    fun loadEventsForAnnounce(
-        kind: CalendarAnnounceKind,
-        calendarIds: Set<Long>,
-        now: LocalDateTime = LocalDateTime.now(zoneId),
-    ): List<CalendarEvent> {
-        return when (kind) {
-            CalendarAnnounceKind.Today -> {
-                val today = now.toLocalDate()
-                loadEvents(calendarIds, today.atStartOfDay(), today.plusDays(1).atStartOfDay())
-                    .filter { overlapsDay(it, today) }
-                    .sortedWith(eventComparator())
-            }
-            CalendarAnnounceKind.RestOfToday -> {
-                val today = now.toLocalDate()
-                loadEvents(calendarIds, now, today.plusDays(1).atStartOfDay())
-                    .filter { overlapsDay(it, today) && (it.allDay || !it.end.isBefore(now)) }
-                    .sortedWith(eventComparator())
-            }
-            CalendarAnnounceKind.Tomorrow -> {
-                val tomorrow = now.toLocalDate().plusDays(1)
-                loadEvents(calendarIds, tomorrow.atStartOfDay(), tomorrow.plusDays(1).atStartOfDay())
-                    .filter { overlapsDay(it, tomorrow) }
-                    .sortedWith(eventComparator())
-            }
-        }
     }
 
     private fun overlapsDay(event: CalendarEvent, day: LocalDate): Boolean {

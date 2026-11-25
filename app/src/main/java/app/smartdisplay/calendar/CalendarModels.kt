@@ -20,15 +20,6 @@ data class CalendarEvent(
     val calendarName: String?,
 )
 
-enum class CalendarAnnounceKind {
-    /** 8:00 今日の予定 */
-    Today,
-    /** 12:00 このあとの予定 */
-    RestOfToday,
-    /** 23:30 明日の予定 */
-    Tomorrow,
-}
-
 data class CalendarDaySections(
     val upcomingToday: List<CalendarEvent>,
     val tomorrow: List<CalendarEvent>,

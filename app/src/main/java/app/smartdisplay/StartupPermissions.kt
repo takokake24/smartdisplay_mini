@@ -14,25 +14,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
-import androidx.health.connect.client.PermissionController
 import app.smartdisplay.media.SystemMediaHub
-import app.smartdisplay.night.canWriteSystemBrightness
-import app.smartdisplay.night.noteBrightnessWritePrompted
-import app.smartdisplay.night.systemBrightnessSettingsIntent
-import app.smartdisplay.steps.StepsAccess
 
 private enum class StartupPermissionStep {
     Runtime,
-    Health,
-    Brightness,
     Notifications,
     Done,
 }
 
 /**
  * 初回起動で、使用許可が要るものを続けて出す。
- * カメラ、カレンダー、歩数、古い端末の画像保存、明るさの変更、通知へのアクセス、
- * Bluetoothの機器名、Wi-Fiのアクセスポイント名。
+ * カレンダー、通知へのアクセス、Bluetoothの機器名、Wi-Fiのアクセスポイント名。
  */
 @Composable
 fun StartupPermissionRequests(systemMedia: SystemMediaHub) {
@@ -50,40 +42,23 @@ fun StartupPermissionRequests(systemMedia: SystemMediaHub) {
         prefs.edit().putBoolean(KeyLinkPrompted, true).apply()
         linkPromptDone = true
     }
-    remember {
-        noteBrightnessWritePrompted(context)
-        true
-    }
     val settingsLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) {
-        when (step) {
-            StartupPermissionStep.Brightness -> moveTo(prefs, StartupPermissionStep.Notifications) { step = it }
-            StartupPermissionStep.Notifications -> moveTo(prefs, StartupPermissionStep.Done) { step = it }
-            StartupPermissionStep.Runtime,
-            StartupPermissionStep.Health,
-            StartupPermissionStep.Done,
-            -> Unit
+        if (step == StartupPermissionStep.Notifications) {
+            moveTo(prefs, StartupPermissionStep.Done) { step = it }
         }
     }
     val runtimeLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) {
         markLinkPrompted()
-        moveTo(prefs, StartupPermissionStep.Health) { step = it }
+        moveTo(prefs, StartupPermissionStep.Notifications) { step = it }
     }
     val linkLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) {
         markLinkPrompted()
-    }
-    val healthLauncher = rememberLauncherForActivityResult(
-        PermissionController.createRequestPermissionResultContract(),
-    ) {
-        prefs.edit().putBoolean(KeyHealthPrompted, true).apply()
-        if (step == StartupPermissionStep.Health) {
-            moveTo(prefs, StartupPermissionStep.Brightness) { step = it }
-        }
     }
 
     LaunchedEffect(step, linkPromptDone) {
@@ -92,39 +67,13 @@ fun StartupPermissionRequests(systemMedia: SystemMediaHub) {
                 val missing = missingRuntimePermissions(context)
                 if (missing.isEmpty()) {
                     markLinkPrompted()
-                    moveTo(prefs, StartupPermissionStep.Health) { step = it }
+                    moveTo(prefs, StartupPermissionStep.Notifications) { step = it }
                 } else {
                     runCatching { runtimeLauncher.launch(missing) }
                         .onFailure {
                             markLinkPrompted()
-                            moveTo(prefs, StartupPermissionStep.Health) { step = it }
+                            moveTo(prefs, StartupPermissionStep.Notifications) { step = it }
                         }
-                }
-            }
-            StartupPermissionStep.Health -> {
-                if (!StepsAccess.isSdkAvailable(context)) {
-                    moveTo(prefs, StartupPermissionStep.Brightness) { step = it }
-                } else if (StepsAccess.hasPermission(context)) {
-                    prefs.edit().putBoolean(KeyHealthPrompted, true).apply()
-                    moveTo(prefs, StartupPermissionStep.Brightness) { step = it }
-                } else {
-                    runCatching {
-                        healthLauncher.launch(StepsAccess.permissionRequest())
-                    }.onFailure {
-                        prefs.edit().putBoolean(KeyHealthPrompted, true).apply()
-                        moveTo(prefs, StartupPermissionStep.Brightness) { step = it }
-                    }
-                }
-            }
-            StartupPermissionStep.Brightness -> {
-                if (canWriteSystemBrightness(context)) {
-                    moveTo(prefs, StartupPermissionStep.Notifications) { step = it }
-                } else {
-                    runCatching {
-                        settingsLauncher.launch(systemBrightnessSettingsIntent(context))
-                    }.onFailure {
-                        moveTo(prefs, StartupPermissionStep.Notifications) { step = it }
-                    }
                 }
             }
             StartupPermissionStep.Notifications -> {
@@ -139,31 +88,16 @@ fun StartupPermissionRequests(systemMedia: SystemMediaHub) {
                 }
             }
             StartupPermissionStep.Done -> {
-                if (!linkPromptDone) {
-                    val missing = missingLinkPermissions(context)
-                    if (missing.isNotEmpty()) {
-                        runCatching { linkLauncher.launch(missing.toTypedArray()) }
-                            .onFailure { markLinkPrompted() }
-                        return@LaunchedEffect
-                    }
-                    markLinkPrompted()
+                if (linkPromptDone) {
                     return@LaunchedEffect
                 }
-                if (prefs.getBoolean(KeyHealthPrompted, false)) {
+                val missing = missingLinkPermissions(context)
+                if (missing.isNotEmpty()) {
+                    runCatching { linkLauncher.launch(missing.toTypedArray()) }
+                        .onFailure { markLinkPrompted() }
                     return@LaunchedEffect
                 }
-                if (!StepsAccess.isSdkAvailable(context)) {
-                    return@LaunchedEffect
-                }
-                if (StepsAccess.hasPermission(context)) {
-                    prefs.edit().putBoolean(KeyHealthPrompted, true).apply()
-                    return@LaunchedEffect
-                }
-                runCatching {
-                    healthLauncher.launch(StepsAccess.permissionRequest())
-                }.onFailure {
-                    prefs.edit().putBoolean(KeyHealthPrompted, true).apply()
-                }
+                markLinkPrompted()
             }
         }
     }
@@ -185,17 +119,8 @@ private fun readStep(raw: String?): StartupPermissionStep {
 
 private fun missingRuntimePermissions(context: Context): Array<String> {
     val names = mutableListOf<String>()
-    if (!isGranted(context, Manifest.permission.CAMERA)) {
-        names += Manifest.permission.CAMERA
-    }
     if (!isGranted(context, Manifest.permission.READ_CALENDAR)) {
         names += Manifest.permission.READ_CALENDAR
-    }
-    if (
-        Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
-        !isGranted(context, Manifest.permission.WRITE_EXTERNAL_STORAGE)
-    ) {
-        names += Manifest.permission.WRITE_EXTERNAL_STORAGE
     }
     names += missingLinkPermissions(context)
     return names.toTypedArray()
@@ -234,5 +159,4 @@ private fun isGranted(context: Context, permission: String): Boolean {
 
 private const val PrefsName = "startup_permissions"
 private const val KeyStep = "step"
-private const val KeyHealthPrompted = "health_prompted"
 private const val KeyLinkPrompted = "link_prompted"

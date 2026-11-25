@@ -12,19 +12,18 @@ import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.health.connect.client.PermissionController
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,7 +32,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -50,17 +48,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -75,7 +70,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -84,85 +78,34 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import app.smartdisplay.away.AwayAlertSettings
-import app.smartdisplay.calendar.CalendarAnnounceKind
+import app.smartdisplay.audio.SoundTestPage
 import app.smartdisplay.calendar.CalendarDaySections
 import app.smartdisplay.calendar.CalendarEvent
 import app.smartdisplay.calendar.CalendarRepository
-import app.smartdisplay.calendar.CalendarSettings
 import app.smartdisplay.calendar.DeviceCalendar
 import app.smartdisplay.calendar.displayTitle
-import app.smartdisplay.earthquake.EarthquakeSettings
 import app.smartdisplay.jihou.HourlyChimeController
-import app.smartdisplay.jihou.JihouSeason
 import app.smartdisplay.jihou.JihouSettings
-import app.smartdisplay.jihou.displayName
-import app.smartdisplay.jihou.specialIntros
-import app.smartdisplay.audio.SoundTestPage
-import app.smartdisplay.away.AwayAlertArchive
-import app.smartdisplay.away.AwayAlertController
-import app.smartdisplay.away.AwayAlertListPage
-import app.smartdisplay.away.AwayAlertMenuLock
-import app.smartdisplay.away.AwayAlertTimelinePage
+import app.smartdisplay.jihou.JihouSpecialIntros
+import app.smartdisplay.media.MusicContent
 import app.smartdisplay.notification.AppNotification
 import app.smartdisplay.notification.NotificationAnnounceSettings
 import app.smartdisplay.notification.NotificationCenter
 import app.smartdisplay.notification.NotificationHistoryPanel
-import app.smartdisplay.notification.OutlinedStatusMark
-import app.smartdisplay.bus.BusReminderScheduler
-import app.smartdisplay.expiration.ExpirationContent
-import app.smartdisplay.garbage.GarbageDayRows
 import app.smartdisplay.observance.ObservanceRows
-import app.smartdisplay.memorial.MemorialDayContent
-import app.smartdisplay.memorial.MemorialRepository
-import app.smartdisplay.night.NightModeMaxBrightness
-import app.smartdisplay.night.NightModeMinBrightness
-import app.smartdisplay.night.NightModeSettings
-import app.smartdisplay.night.canWriteSystemBrightness
-import app.smartdisplay.night.systemBrightnessSettingsIntent
-import app.smartdisplay.bus.BusRemindersContent
-import app.smartdisplay.bus.BusTimetableContent
-import app.smartdisplay.bus.BusTimetableRepository
-import app.smartdisplay.bus.BusTrip
-import app.smartdisplay.train.TrainTimetableContent
-import app.smartdisplay.train.TrainTimetableRepository
-import app.smartdisplay.transit.LineOperation
-import app.smartdisplay.transit.TrainLine
-import app.smartdisplay.transit.toStatusMark
 import app.smartdisplay.speech.AnnouncementGate
-import app.smartdisplay.timer.TimerController
-import app.smartdisplay.timer.AlarmPage
-import app.smartdisplay.timer.ClockHubPage
-import app.smartdisplay.timer.TimerPage
-import app.smartdisplay.steps.StepsAccess
-import app.smartdisplay.steps.StepsPage
-import app.smartdisplay.speech.SpeechSpeaker
-import app.smartdisplay.spotify.MusicContent
 import app.smartdisplay.switchbot.DeviceControlContent
 import app.smartdisplay.switchbot.QuickActionsEntry
 import app.smartdisplay.ui.Panel
-import app.smartdisplay.ui.RefreshChip
-import app.smartdisplay.util.InternetConnectivity
 import app.smartdisplay.util.NetworkLog
 import app.smartdisplay.util.NetworkLogCategory
 import app.smartdisplay.util.NetworkLogEntry
-import app.smartdisplay.util.formatLastUpdatedLabel
-import app.smartdisplay.warning.WeatherWarningItem
-import app.smartdisplay.warning.WeatherWarningSeverity
-import app.smartdisplay.weather.DailyWeather
-import app.smartdisplay.weather.WeatherAnnounceKind
-import app.smartdisplay.weather.WeatherRepository
-import app.smartdisplay.weather.WeatherIcon
-import app.smartdisplay.weather.daylightRemainingLabel
-import app.smartdisplay.weather.moonPhaseInfo
-import app.smartdisplay.weather.weatherDescriptionJa
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDateTime
-import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
@@ -170,44 +113,21 @@ import kotlin.math.roundToInt
 
 private const val VolumeChangedAction = "android.media.VOLUME_CHANGED_ACTION"
 private const val ExtraVolumeStreamType = "android.media.EXTRA_VOLUME_STREAM_TYPE"
+
 private enum class MenuPage {
     Home,
     Settings,
     NotificationSettings,
     JihouSettings,
-    JihouTodayTheme,
-    CalendarSettings,
-    VolumeBrightness,
-    EarthquakeSettings,
-    AwayAlertVolume,
     TestExecution,
     JihouTest,
-    EarthquakeTest,
-    WeatherCalendarTest,
-    WeatherWarningTest,
     Music,
     DeviceControl,
-    Weather,
-    WeatherWarning,
     Calendar,
     Observances,
-    Expiration,
-    Steps,
-    AwayAlerts,
-    AwayAlertPhotos,
-    TransitInfo,
-    TrainTimetable,
-    BusTimetable,
-    BusReminders,
-    MemorialDays,
-    GarbageDays,
-    Clock,
-    Timer,
-    Alarm,
     NotificationHistory,
     NetworkLog,
     SoundTest,
-    NightMode,
 }
 
 @Composable
@@ -215,61 +135,19 @@ fun MenuScreen(
     now: LocalDateTime,
     jihouSettings: JihouSettings,
     notificationAnnounceSettings: NotificationAnnounceSettings,
-    nightModeSettings: NightModeSettings,
-    calendarSettings: CalendarSettings,
-    earthquakeSettings: EarthquakeSettings,
-    awayAlertSettings: AwayAlertSettings,
-    awayAlerts: AwayAlertArchive,
-    awayAlertController: AwayAlertController,
     chimeController: HourlyChimeController,
     announcementGate: AnnouncementGate,
     notifications: NotificationCenter,
     history: List<AppNotification>,
-    operations: Map<TrainLine, LineOperation>,
-    weatherRepository: WeatherRepository,
-    weatherLastFetchedAt: LocalDateTime?,
-    earthquakeLastPolledAt: LocalDateTime?,
-    transitLastFetchedAt: LocalDateTime?,
-    activeWeatherWarnings: List<WeatherWarningItem>,
-    weatherWarningLastFetchedAt: LocalDateTime?,
-    trainTimetableRepository: TrainTimetableRepository,
-    busTimetableRepository: BusTimetableRepository,
-    memorialRepository: MemorialRepository,
-    busReminderScheduler: BusReminderScheduler,
-    busScheduledTrips: List<BusTrip>,
-    onRefreshTransit: () -> Unit,
-    onScheduleSplitTest: () -> Unit,
-    onCalendarAnnounceTest: (CalendarAnnounceKind) -> Unit,
-    onCalendarSoonTest: () -> Unit,
-    onWeatherAnnounceTest: (WeatherAnnounceKind) -> Unit,
-    onStepsAnnounceTest: () -> Unit,
-    onMemorialAnnounceTest: () -> Unit,
-    onQuoteAnnounceTest: () -> Unit,
-    onExpirationAnnounceTest: () -> Unit,
-    onNoonNoticeTest: () -> Unit,
-    onLateNoticeTest: () -> Unit,
-    onSunsetTest: () -> Unit,
-    onMorningBriefTest: () -> Unit,
-    onEewTest: () -> Unit,
-    onEarthquakeIntensityTest: (Int?) -> Unit,
-    onEarthquakeIntensityUpdateTest: () -> Unit,
-    onWeatherWarningTest: (WeatherWarningSeverity) -> Unit,
-    onWeatherWarningCancelTest: (WeatherWarningSeverity) -> Unit,
-    onPreviewEewVolume: (Float) -> Unit,
-    onPreviewAwayVolume: (Float) -> Unit,
     onBack: () -> Unit,
     onInteraction: () -> Unit,
     onSoundTestOpen: (Boolean) -> Unit,
     onTapSound: () -> Unit,
     onErrorSound: () -> Unit,
     startOnMedia: Boolean = false,
-    timer: TimerController,
-    onTimerStarted: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var page by remember { mutableStateOf(if (startOnMedia) MenuPage.Music else MenuPage.Home) }
-    val timerState by timer.state.collectAsState()
-    val alarmState by timer.alarmState.collectAsState()
     val reportSoundTestOpen by rememberUpdatedState(onSoundTestOpen)
     DisposableEffect(page) {
         val open = page == MenuPage.SoundTest
@@ -282,48 +160,18 @@ fun MenuScreen(
             }
         }
     }
-    var selectedAwayAlertId by remember { mutableStateOf<String?>(null) }
-    var awayAlertsUnlocked by remember { mutableStateOf(false) }
     val latestInteraction by rememberUpdatedState(onInteraction)
     val unreadCount = history.count { !it.read }
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val calendarRepository = remember { CalendarRepository(context.applicationContext) }
-    var pendingStepsTest by remember { mutableStateOf(false) }
-    val stepsPermissionLauncher = rememberLauncherForActivityResult(
-        PermissionController.createRequestPermissionResultContract(),
-    ) { granted ->
-        val runTest = pendingStepsTest
-        pendingStepsTest = false
-        if (runTest && StepsAccess.readPermission in granted) {
-            onStepsAnnounceTest()
-        }
-    }
     var hasCalendarPermission by remember {
         mutableStateOf(calendarRepository.hasPermission())
     }
-    var pendingCalendarPage by remember { mutableStateOf<MenuPage?>(null) }
-    var pendingCalendarTest by remember { mutableStateOf<CalendarAnnounceKind?>(null) }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
         hasCalendarPermission = granted
-        val target = pendingCalendarPage
-        val testKind = pendingCalendarTest
-        pendingCalendarPage = null
-        pendingCalendarTest = null
-        if (!granted) {
-            if (testKind != null) {
-                onCalendarAnnounceTest(testKind)
-            }
-            return@rememberLauncherForActivityResult
-        }
-        if (target != null) {
-            page = target
-        }
-        if (testKind != null) {
-            onCalendarAnnounceTest(testKind)
-        }
+        page = MenuPage.Calendar
     }
     val appSettingsLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -339,11 +187,10 @@ fun MenuScreen(
         appSettingsLauncher.launch(intent)
     }
 
-    fun openWithCalendarPermission(target: MenuPage) {
+    fun openCalendar() {
         if (hasCalendarPermission) {
-            page = target
+            page = MenuPage.Calendar
         } else {
-            pendingCalendarPage = target
             permissionLauncher.launch(Manifest.permission.READ_CALENDAR)
         }
     }
@@ -352,46 +199,19 @@ fun MenuScreen(
         when (page) {
             MenuPage.Home -> onBack()
             MenuPage.Settings,
-            MenuPage.TransitInfo,
-            MenuPage.TrainTimetable,
-            MenuPage.BusTimetable,
             MenuPage.Music,
-            MenuPage.Clock,
             MenuPage.DeviceControl,
-            MenuPage.Weather,
-            MenuPage.WeatherWarning,
             MenuPage.Calendar,
             MenuPage.Observances,
-            MenuPage.Expiration,
-            MenuPage.Steps,
-            MenuPage.AwayAlerts,
-            MenuPage.MemorialDays,
-            MenuPage.GarbageDays,
             MenuPage.NotificationHistory,
             -> page = MenuPage.Home
-            MenuPage.AwayAlertPhotos -> page = MenuPage.AwayAlerts
-            MenuPage.BusReminders -> page = MenuPage.BusTimetable
-            MenuPage.Timer,
-            MenuPage.Alarm,
-            -> page = MenuPage.Clock
             MenuPage.NotificationSettings,
             MenuPage.JihouSettings,
-            MenuPage.CalendarSettings,
-            MenuPage.VolumeBrightness,
             MenuPage.TestExecution,
             MenuPage.NetworkLog,
             MenuPage.SoundTest,
             -> page = MenuPage.Settings
-            MenuPage.NightMode,
-            MenuPage.EarthquakeSettings,
-            MenuPage.AwayAlertVolume,
-            -> page = MenuPage.VolumeBrightness
-            MenuPage.JihouTodayTheme -> page = MenuPage.JihouSettings
-            MenuPage.JihouTest,
-            MenuPage.EarthquakeTest,
-            MenuPage.WeatherCalendarTest,
-            MenuPage.WeatherWarningTest,
-            -> page = MenuPage.TestExecution
+            MenuPage.JihouTest -> page = MenuPage.TestExecution
         }
     }
 
@@ -443,10 +263,6 @@ fun MenuScreen(
 
         when (page) {
             MenuPage.Home -> MenuHomeContent(
-                onOpenClock = {
-                    onTapSound()
-                    page = MenuPage.Clock
-                },
                 onOpenMusic = {
                     onTapSound()
                     page = MenuPage.Music
@@ -455,65 +271,14 @@ fun MenuScreen(
                     onTapSound()
                     page = MenuPage.DeviceControl
                 },
-                onOpenWeather = {
-                    onTapSound()
-                    page = MenuPage.Weather
-                },
-                onOpenWeatherWarning = {
-                    onTapSound()
-                    page = MenuPage.WeatherWarning
-                },
                 onOpenCalendar = {
                     onTapSound()
-                    page = MenuPage.Calendar
+                    openCalendar()
                 },
                 onOpenObservances = {
                     onTapSound()
                     page = MenuPage.Observances
                 },
-                onOpenExpiration = {
-                    onTapSound()
-                    page = MenuPage.Expiration
-                },
-                onOpenSteps = {
-                    onTapSound()
-                    page = MenuPage.Steps
-                },
-                onOpenAwayAlerts = {
-                    onTapSound()
-                    awayAlertsUnlocked = false
-                    page = MenuPage.AwayAlerts
-                },
-                onOpenTransit = {
-                    onTapSound()
-                    onRefreshTransit()
-                    page = MenuPage.TransitInfo
-                },
-                onOpenTrainTimetable = {
-                    onTapSound()
-                    page = MenuPage.TrainTimetable
-                },
-                onOpenBusTimetable = {
-                    onTapSound()
-                    page = MenuPage.BusTimetable
-                },
-                onOpenMemorialDays = {
-                    onTapSound()
-                    page = MenuPage.MemorialDays
-                },
-                onOpenGarbageDays = {
-                    onTapSound()
-                    page = MenuPage.GarbageDays
-                },
-                onTapSound = onTapSound,
-                onErrorSound = onErrorSound,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            )
-            MenuPage.MemorialDays -> MemorialDayContent(
-                now = now,
-                repository = memorialRepository,
                 onTapSound = onTapSound,
                 onErrorSound = onErrorSound,
                 modifier = Modifier
@@ -531,16 +296,9 @@ fun MenuScreen(
                     onTapSound = onTapSound,
                 )
             }
-            MenuPage.GarbageDays -> MenuSubpageColumn(
-                title = "ごみの日",
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            ) {
-                GarbageDayRows(now)
-            }
             MenuPage.Settings -> SettingsContent(
                 notificationAnnounceSettings = notificationAnnounceSettings,
+                jihouSettings = jihouSettings,
                 onOpenNotificationSettings = {
                     onTapSound()
                     page = MenuPage.NotificationSettings
@@ -548,14 +306,6 @@ fun MenuScreen(
                 onOpenJihouSettings = {
                     onTapSound()
                     page = MenuPage.JihouSettings
-                },
-                onOpenCalendarSettings = {
-                    onTapSound()
-                    openWithCalendarPermission(MenuPage.CalendarSettings)
-                },
-                onOpenVolumeBrightness = {
-                    onTapSound()
-                    page = MenuPage.VolumeBrightness
                 },
                 onOpenTestExecution = {
                     onTapSound()
@@ -596,75 +346,7 @@ fun MenuScreen(
                     .weight(1f),
             )
             MenuPage.JihouSettings -> JihouSettingsContent(
-                now = now,
                 settings = jihouSettings,
-                onOpenTodayTheme = {
-                    onTapSound()
-                    page = MenuPage.JihouTodayTheme
-                },
-                onTapSound = onTapSound,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            )
-            MenuPage.JihouTodayTheme -> JihouTodayThemeContent(
-                now = now,
-                settings = jihouSettings,
-                onTapSound = onTapSound,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            )
-            MenuPage.CalendarSettings -> CalendarSettingsContent(
-                settings = calendarSettings,
-                repository = calendarRepository,
-                hasPermission = hasCalendarPermission,
-                onRequestPermission = {
-                    onTapSound()
-                    permissionLauncher.launch(Manifest.permission.READ_CALENDAR)
-                },
-                onTapSound = onTapSound,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            )
-            MenuPage.VolumeBrightness -> VolumeBrightnessContent(
-                nightModeSettings = nightModeSettings,
-                onOpenNightMode = {
-                    onTapSound()
-                    page = MenuPage.NightMode
-                },
-                onOpenEarthquakeSettings = {
-                    onTapSound()
-                    page = MenuPage.EarthquakeSettings
-                },
-                onOpenAwayAlertVolume = {
-                    onTapSound()
-                    page = MenuPage.AwayAlertVolume
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            )
-            MenuPage.AwayAlertVolume -> AwayAlertVolumeContent(
-                settings = awayAlertSettings,
-                onPreviewVolume = onPreviewAwayVolume,
-                onTapSound = onTapSound,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            )
-            MenuPage.NightMode -> NightModeContent(
-                settings = nightModeSettings,
-                chimeController = chimeController,
-                onTapSound = onTapSound,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            )
-            MenuPage.EarthquakeSettings -> EarthquakeSettingsContent(
-                settings = earthquakeSettings,
-                onPreviewVolume = onPreviewEewVolume,
                 onTapSound = onTapSound,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -674,22 +356,6 @@ fun MenuScreen(
                 onOpenJihouTest = {
                     onTapSound()
                     page = MenuPage.JihouTest
-                },
-                onOpenEarthquakeTest = {
-                    onTapSound()
-                    page = MenuPage.EarthquakeTest
-                },
-                onOpenWeatherCalendarTest = {
-                    onTapSound()
-                    page = MenuPage.WeatherCalendarTest
-                },
-                onOpenWeatherWarningTest = {
-                    onTapSound()
-                    page = MenuPage.WeatherWarningTest
-                },
-                onScheduleSplitTest = {
-                    onTapSound()
-                    onScheduleSplitTest()
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -702,147 +368,8 @@ fun MenuScreen(
                     .fillMaxWidth()
                     .weight(1f),
             )
-            MenuPage.EarthquakeTest -> EarthquakeTestContent(
-                onEewTest = {
-                    onTapSound()
-                    onEewTest()
-                },
-                onEarthquakeIntensityTest = { scale ->
-                    onTapSound()
-                    onEarthquakeIntensityTest(scale)
-                },
-                onEarthquakeIntensityUpdateTest = {
-                    onTapSound()
-                    onEarthquakeIntensityUpdateTest()
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            )
-            MenuPage.WeatherCalendarTest -> WeatherCalendarTestContent(
-                onNoonNoticeTest = {
-                    onTapSound()
-                    onNoonNoticeTest()
-                },
-                onLateNoticeTest = {
-                    onTapSound()
-                    onLateNoticeTest()
-                },
-                onSunsetTest = {
-                    onTapSound()
-                    onSunsetTest()
-                },
-                onMemorialAnnounceTest = {
-                    onTapSound()
-                    onMemorialAnnounceTest()
-                },
-                onQuoteAnnounceTest = {
-                    onTapSound()
-                    onQuoteAnnounceTest()
-                },
-                onExpirationAnnounceTest = {
-                    onTapSound()
-                    onExpirationAnnounceTest()
-                },
-                onWeatherAnnounceTest = { kind ->
-                    onTapSound()
-                    onWeatherAnnounceTest(kind)
-                },
-                onStepsAnnounceTest = {
-                    onTapSound()
-                    scope.launch {
-                        val available = StepsAccess.isSdkAvailable(context)
-                        val granted = withContext(Dispatchers.IO) {
-                            StepsAccess.hasPermission(context)
-                        }
-                        when {
-                            granted -> onStepsAnnounceTest()
-                            available -> {
-                                pendingStepsTest = true
-                                stepsPermissionLauncher.launch(StepsAccess.permissionRequest())
-                            }
-                            else -> onStepsAnnounceTest()
-                        }
-                    }
-                },
-                onMorningBriefTest = {
-                    onTapSound()
-                    onMorningBriefTest()
-                },
-                onCalendarAnnounceTest = { kind ->
-                    onTapSound()
-                    if (hasCalendarPermission) {
-                        onCalendarAnnounceTest(kind)
-                    } else {
-                        pendingCalendarTest = kind
-                        permissionLauncher.launch(Manifest.permission.READ_CALENDAR)
-                    }
-                },
-                onCalendarSoonTest = {
-                    onTapSound()
-                    onCalendarSoonTest()
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            )
-            MenuPage.WeatherWarningTest -> WeatherWarningTestContent(
-                onIssueTest = { severity ->
-                    onTapSound()
-                    onWeatherWarningTest(severity)
-                },
-                onCancelTest = { severity ->
-                    onTapSound()
-                    onWeatherWarningCancelTest(severity)
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            )
-            MenuPage.Clock -> ClockHubPage(
-                timerState = timerState,
-                alarmState = alarmState,
-                now = now,
-                onOpenTimer = {
-                    onTapSound()
-                    page = MenuPage.Timer
-                },
-                onOpenAlarm = {
-                    onTapSound()
-                    page = MenuPage.Alarm
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            )
-            MenuPage.Timer -> TimerPage(
-                state = timerState,
-                now = now,
-                onStart = { durationMillis ->
-                    timer.start(durationMillis)
-                    onTimerStarted()
-                },
-                onStop = { timer.stop() },
-                onTapSound = onTapSound,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            )
-            MenuPage.Alarm -> AlarmPage(
-                state = alarmState,
-                onStart = { hour, minute ->
-                    timer.startAlarm(hour, minute)
-                    onTimerStarted()
-                },
-                onStop = { timer.stopAlarm() },
-                onTapSound = onTapSound,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            )
             MenuPage.Music -> MusicContent(
                 onTapSound = onTapSound,
-                onErrorSound = onErrorSound,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
@@ -855,125 +382,14 @@ fun MenuScreen(
                     .fillMaxWidth()
                     .weight(1f),
             )
-            MenuPage.Weather -> WeatherContent(
-                now = now,
-                repository = weatherRepository,
-                weatherLastFetchedAt = weatherLastFetchedAt,
-                earthquakeLastPolledAt = earthquakeLastPolledAt,
-                onTapSound = onTapSound,
-                onErrorSound = onErrorSound,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            )
-            MenuPage.WeatherWarning -> WeatherWarningContent(
-                now = now,
-                warnings = activeWeatherWarnings,
-                lastFetchedAt = weatherWarningLastFetchedAt,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            )
-            MenuPage.AwayAlerts -> if (awayAlertsUnlocked) {
-                AwayAlertListPage(
-                    archive = awayAlerts,
-                    onOpenPhotos = { id ->
-                        selectedAwayAlertId = id
-                        page = MenuPage.AwayAlertPhotos
-                    },
-                    onOpenSettings = { openAppSettings() },
-                    onTapSound = onTapSound,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                )
-            } else {
-                AwayAlertMenuLock(
-                    controller = awayAlertController,
-                    onUnlocked = { awayAlertsUnlocked = true },
-                    onTapSound = onTapSound,
-                    onBeep = onErrorSound,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                )
-            }
-            MenuPage.AwayAlertPhotos -> AwayAlertTimelinePage(
-                archive = awayAlerts,
-                alertId = selectedAwayAlertId,
-                onTapSound = onTapSound,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            )
-            MenuPage.Steps -> StepsPage(
-                today = now.toLocalDate(),
-                onTapSound = onTapSound,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            )
-            MenuPage.Expiration -> ExpirationContent(
-                today = now.toLocalDate(),
-                onTapSound = onTapSound,
-                onErrorSound = onErrorSound,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            )
             MenuPage.Calendar -> CalendarContent(
                 now = now,
-                settings = calendarSettings,
                 repository = calendarRepository,
                 hasPermission = hasCalendarPermission,
                 onOpenAppSettings = {
                     onTapSound()
                     openAppSettings()
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            )
-            MenuPage.TrainTimetable -> TrainTimetableContent(
-                now = now,
-                repository = trainTimetableRepository,
-                onTapSound = onTapSound,
-                onErrorSound = onErrorSound,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            )
-            MenuPage.TransitInfo -> TransitInfoContent(
-                now = now,
-                operations = operations,
-                lastFetchedAt = transitLastFetchedAt,
-                onRefresh = {
-                    onTapSound()
-                    onRefreshTransit()
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            )
-            MenuPage.BusTimetable -> BusTimetableContent(
-                now = now,
-                repository = busTimetableRepository,
-                reminderScheduler = busReminderScheduler,
-                scheduledTrips = busScheduledTrips,
-                onOpenReminders = {
-                    page = MenuPage.BusReminders
-                },
-                onTapSound = onTapSound,
-                onErrorSound = onErrorSound,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            )
-            MenuPage.BusReminders -> BusRemindersContent(
-                now = now,
-                reminderScheduler = busReminderScheduler,
-                scheduledTrips = busScheduledTrips,
-                onTapSound = onTapSound,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
@@ -1279,42 +695,21 @@ private fun BatteryStatusIcon(
 
 @Composable
 private fun MenuHomeContent(
-    onOpenClock: () -> Unit,
     onOpenMusic: () -> Unit,
     onOpenDeviceControl: () -> Unit,
-    onOpenWeather: () -> Unit,
-    onOpenWeatherWarning: () -> Unit,
     onOpenCalendar: () -> Unit,
     onOpenObservances: () -> Unit,
-    onOpenExpiration: () -> Unit,
-    onOpenSteps: () -> Unit,
-    onOpenAwayAlerts: () -> Unit,
-    onOpenTransit: () -> Unit,
-    onOpenTrainTimetable: () -> Unit,
-    onOpenBusTimetable: () -> Unit,
-    onOpenMemorialDays: () -> Unit,
-    onOpenGarbageDays: () -> Unit,
     onTapSound: () -> Unit,
     onErrorSound: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val menuItems = listOf(
-        "クロック" to onOpenClock,
         "メディア" to onOpenMusic,
         "機器操作" to onOpenDeviceControl,
-        "天気予報" to onOpenWeather,
-        "気象警報" to onOpenWeatherWarning,
         "カレンダー" to onOpenCalendar,
         "行事" to onOpenObservances,
-        "賞味期限管理" to onOpenExpiration,
-        "歩数計" to onOpenSteps,
-        "アラート" to onOpenAwayAlerts,
-        "運行情報" to onOpenTransit,
-        "鉄道時刻表" to onOpenTrainTimetable,
-        "バス時刻表" to onOpenBusTimetable,
-        "記念日" to onOpenMemorialDays,
-        "ごみの日" to onOpenGarbageDays,
     )
+    val columns = 2
     val rowGap = 16.dp
     val minRowHeight = 96.dp
     Column(
@@ -1328,7 +723,7 @@ private fun MenuHomeContent(
                 .fillMaxWidth()
                 .weight(1f),
         ) {
-            val rows = menuItems.chunked(3)
+            val rows = menuItems.chunked(columns)
             val rowCount = rows.size.coerceAtLeast(1)
             val gaps = rowGap * (rowCount - 1).coerceAtLeast(0)
             val availableForRows = maxHeight - gaps
@@ -1367,7 +762,7 @@ private fun MenuHomeContent(
                                     .fillMaxHeight(),
                             )
                         }
-                        repeat(3 - rowItems.size) {
+                        repeat(columns - rowItems.size) {
                             Spacer(modifier = Modifier.weight(1f))
                         }
                     }
@@ -1418,104 +813,11 @@ private fun HomeMenuTile(
 }
 
 @Composable
-private fun TransitInfoContent(
-    now: LocalDateTime,
-    operations: Map<TrainLine, LineOperation>,
-    lastFetchedAt: LocalDateTime?,
-    onRefresh: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier
-            .padding(top = 28.dp)
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "運行情報",
-                color = Color.White,
-                fontSize = 30.sp,
-                fontWeight = FontWeight.Medium,
-            )
-            RefreshChip(onClick = onRefresh)
-        }
-        QuietLastUpdatedLabel(
-            text = formatLastUpdatedLabel(lastFetchedAt, now),
-        )
-        TrainLine.entries.forEach { line ->
-            val operation = operations[line]
-            Panel(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    Image(
-                        painter = painterResource(line.iconResId),
-                        contentDescription = line.displayName,
-                        modifier = Modifier.size(48.dp),
-                    )
-                    Text(
-                        text = line.displayName,
-                        color = Color.White,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (operation != null) {
-                        OutlinedStatusMark(
-                            mark = operation.kind.toStatusMark(),
-                            fontSizeSp = 40f,
-                            strokeWidth = 4.5f,
-                            bodyStrokeWidth = 7f,
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                if (operation == null) {
-                    Text(
-                        text = "情報を取得中です…",
-                        color = Color.White.copy(alpha = 0.65f),
-                        fontSize = 18.sp,
-                    )
-                } else {
-                    Text(
-                        text = operation.statusLabel,
-                        color = Color.White,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Text(
-                        text = operation.detail,
-                        color = Color.White.copy(alpha = 0.75f),
-                        fontSize = 18.sp,
-                        modifier = Modifier.padding(top = 6.dp),
-                    )
-                    operation.updatedAtText?.let { updated ->
-                        Text(
-                            text = updated,
-                            color = Color.White.copy(alpha = 0.45f),
-                            fontSize = 16.sp,
-                            modifier = Modifier.padding(top = 8.dp),
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun SettingsContent(
     notificationAnnounceSettings: NotificationAnnounceSettings,
+    jihouSettings: JihouSettings,
     onOpenNotificationSettings: () -> Unit,
     onOpenJihouSettings: () -> Unit,
-    onOpenCalendarSettings: () -> Unit,
-    onOpenVolumeBrightness: () -> Unit,
     onOpenTestExecution: () -> Unit,
     onOpenNetworkLog: () -> Unit,
     onOpenSoundTest: () -> Unit,
@@ -1535,15 +837,8 @@ private fun SettingsContent(
         )
         SettingsItem(
             title = "時報設定",
+            subtitle = if (jihouSettings.enabled) "オン" else "オフ",
             onClick = onOpenJihouSettings,
-        )
-        SettingsItem(
-            title = "カレンダー設定",
-            onClick = onOpenCalendarSettings,
-        )
-        SettingsItem(
-            title = "音量・明るさ",
-            onClick = onOpenVolumeBrightness,
         )
         SettingsItem(
             title = "テスト実行",
@@ -1556,119 +851,6 @@ private fun SettingsContent(
         SettingsItem(
             title = "サウンドテスト",
             onClick = onOpenSoundTest,
-        )
-    }
-}
-
-@Composable
-private fun VolumeBrightnessContent(
-    nightModeSettings: NightModeSettings,
-    onOpenNightMode: () -> Unit,
-    onOpenEarthquakeSettings: () -> Unit,
-    onOpenAwayAlertVolume: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    MenuSubpageColumn(title = "音量・明るさ", modifier = modifier) {
-        SettingsItem(
-            title = "ナイトモード",
-            subtitle = if (nightModeSettings.enabled) "オン・0:00〜6:00" else "オフ",
-            onClick = onOpenNightMode,
-        )
-        SettingsItem(
-            title = "緊急警報音量",
-            onClick = onOpenEarthquakeSettings,
-        )
-        SettingsItem(
-            title = "外出アラート音量",
-            onClick = onOpenAwayAlertVolume,
-        )
-    }
-}
-
-@Composable
-private fun whiteSliderColors() = SliderDefaults.colors(
-    thumbColor = Color.White,
-    activeTrackColor = Color.White.copy(alpha = 0.85f),
-    inactiveTrackColor = Color.White.copy(alpha = 0.25f),
-)
-
-@Composable
-private fun RatioPreviewPanel(
-    ratio: Float,
-    onRatioChange: (Float) -> Unit,
-    onPreview: () -> Unit,
-    onTapSound: () -> Unit,
-    onSlideFinished: (() -> Unit)? = null,
-) {
-    val scope = rememberCoroutineScope()
-    var previewJob by remember { mutableStateOf<Job?>(null) }
-    val percent = (ratio * 100f).roundToInt()
-    Panel(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "$percent%",
-            color = Color.White,
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Medium,
-        )
-        Slider(
-            value = ratio,
-            onValueChange = { value ->
-                onRatioChange(value)
-                previewJob?.cancel()
-                previewJob = scope.launch {
-                    delay(450L)
-                    onPreview()
-                }
-            },
-            onValueChangeFinished = { onSlideFinished?.invoke() },
-            valueRange = 0f..1f,
-            colors = whiteSliderColors(),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp),
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(
-                text = "試す",
-                color = Color.White.copy(alpha = 0.9f),
-                fontSize = 20.sp,
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.12f))
-                    .clickable {
-                        onTapSound()
-                        previewJob?.cancel()
-                        onPreview()
-                    }
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun AwayAlertVolumeContent(
-    settings: AwayAlertSettings,
-    onPreviewVolume: (Float) -> Unit,
-    onTapSound: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    MenuSubpageColumn(title = "外出アラート音量", modifier = modifier) {
-        Text(
-            text = "外出モードのアラートが発動しているあいだ、音楽と案内をこの音量で鳴らします",
-            color = Color.White.copy(alpha = 0.65f),
-            fontSize = 18.sp,
-        )
-        RatioPreviewPanel(
-            ratio = settings.volumeRatio,
-            onRatioChange = settings::updateVolumeRatio,
-            onPreview = { onPreviewVolume(settings.volumeRatio) },
-            onTapSound = onTapSound,
         )
     }
 }
@@ -1888,487 +1070,16 @@ private fun NetworkLogRow(
 }
 
 @Composable
-private fun EarthquakeSettingsContent(
-    settings: EarthquakeSettings,
-    onPreviewVolume: (Float) -> Unit,
-    onTapSound: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    MenuSubpageColumn(title = "緊急警報音量", modifier = modifier) {
-        Text(
-            text = "緊急地震速報・気象特別／危険警報の発令時に一時的に上げる音量です",
-            color = Color.White.copy(alpha = 0.65f),
-            fontSize = 18.sp,
-        )
-        RatioPreviewPanel(
-            ratio = settings.eewVolumeRatio,
-            onRatioChange = settings::updateEewVolumeRatio,
-            onPreview = { onPreviewVolume(settings.eewVolumeRatio) },
-            onTapSound = onTapSound,
-        )
-    }
-}
-
-@Composable
 private fun TestExecutionContent(
     onOpenJihouTest: () -> Unit,
-    onOpenEarthquakeTest: () -> Unit,
-    onOpenWeatherCalendarTest: () -> Unit,
-    onOpenWeatherWarningTest: () -> Unit,
-    onScheduleSplitTest: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     MenuSubpageColumn(title = "テスト実行", modifier = modifier) {
-SettingsItem(
+        SettingsItem(
             title = "時報テスト",
-            subtitle = "モード・四半期・特殊正時",
+            subtitle = "四半期・特殊正時",
             onClick = onOpenJihouTest,
         )
-        SettingsItem(
-            title = "運行情報テスト",
-            subtitle = "即時に通知",
-            onClick = onScheduleSplitTest,
-        )
-        SettingsItem(
-            title = "地震情報",
-            subtitle = "緊急地震速報・震度情報",
-            onClick = onOpenEarthquakeTest,
-        )
-        SettingsItem(
-            title = "デイリー通知",
-            subtitle = "朝のまとめ・昼のまとめ・日の入り・夜の通知",
-            onClick = onOpenWeatherCalendarTest,
-        )
-        SettingsItem(
-            title = "気象警報",
-            subtitle = "特別警報・危険警報・警報・注意報",
-            onClick = onOpenWeatherWarningTest,
-        )
-    }
-}
-
-@Composable
-private fun NightModeContent(
-    settings: NightModeSettings,
-    chimeController: HourlyChimeController,
-    onTapSound: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val context = LocalContext.current
-    var canWriteBrightness by remember {
-        mutableStateOf(canWriteSystemBrightness(context))
-    }
-    val brightnessPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult(),
-    ) {
-        canWriteBrightness = canWriteSystemBrightness(context)
-    }
-    val scope = rememberCoroutineScope()
-    var brightnessRestoreJob by remember { mutableStateOf<Job?>(null) }
-    DisposableEffect(settings, chimeController) {
-        onDispose {
-            brightnessRestoreJob?.cancel()
-            chimeController.stopVolumePreview()
-            settings.setBrightnessPreview(null)
-        }
-    }
-    val percent = (settings.brightness * 100f).roundToInt()
-    MenuSubpageColumn(title = "ナイトモード", modifier = modifier) {
-        Panel(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "ナイトモード",
-                        color = Color.White,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Text(
-                        text = if (settings.enabled) "オン・0:00〜6:00" else "オフ",
-                        color = Color.White.copy(alpha = 0.65f),
-                        fontSize = 18.sp,
-                    )
-                }
-                Switch(
-                    checked = settings.enabled,
-                    onCheckedChange = { enabled ->
-                        onTapSound()
-                        settings.updateEnabled(enabled)
-                        if (enabled && !canWriteSystemBrightness(context)) {
-                            brightnessPermissionLauncher.launch(
-                                systemBrightnessSettingsIntent(context),
-                            )
-                        }
-                    },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = Color(0xFF3DDC84),
-                        checkedBorderColor = Color(0xFF3DDC84),
-                        uncheckedThumbColor = Color.White.copy(alpha = 0.7f),
-                        uncheckedTrackColor = Color.White.copy(alpha = 0.16f),
-                        uncheckedBorderColor = Color.White.copy(alpha = 0.28f),
-                    ),
-                )
-            }
-        }
-        Text(
-            text = "0:00〜6:00は明るさの自動を切り、この割合に固定します。通知が出ているあいだと、メニュー中、操作から60秒間は、切り替える前の明るさに戻します。通知が消えるとこの割合に戻します。緊急の全画面案内と外出アラートは最大の明るさにし、半分の通知になると切り替える前の明るさ、それが消えるとこの割合に戻します。6:00を過ぎるかオフにすると、元の自動設定と明るさに戻します。",
-            color = Color.White.copy(alpha = 0.65f),
-            fontSize = 18.sp,
-        )
-        if (!canWriteBrightness) {
-            SettingsItem(
-                title = "明るさの変更を許可",
-                subtitle = "自動を切るために必要です",
-                onClick = {
-                    onTapSound()
-                    brightnessPermissionLauncher.launch(systemBrightnessSettingsIntent(context))
-                },
-            )
-        }
-        Text(
-            text = "時報の音量",
-            color = Color.White,
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Medium,
-        )
-        Text(
-            text = "ナイトモード中の時報と、「x時です」の読み上げをこの大きさにします。100%が通常の時報です。通知の読み上げは通常の音量、緊急通知は緊急警報音量のままです。",
-            color = Color.White.copy(alpha = 0.65f),
-            fontSize = 18.sp,
-        )
-        RatioPreviewPanel(
-            ratio = settings.chimeVolumeRatio,
-            onRatioChange = settings::updateChimeVolumeRatio,
-            onPreview = { chimeController.previewChimeVolume(settings.chimeVolumeRatio) },
-            onTapSound = onTapSound,
-            onSlideFinished = onTapSound,
-        )
-        Text(
-            text = "画面の明るさ",
-            color = Color.White,
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Medium,
-        )
-        Text(
-            text = "動かしているあいだはこの明るさになり、離して1秒後に元の明るさへ戻ります。",
-            color = Color.White.copy(alpha = 0.65f),
-            fontSize = 18.sp,
-        )
-        Panel(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = "$percent%",
-                color = Color.White,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Medium,
-            )
-            Slider(
-                value = settings.brightness,
-                onValueChange = { value ->
-                    settings.updateBrightness(value)
-                    brightnessRestoreJob?.cancel()
-                    settings.setBrightnessPreview(value)
-                },
-                onValueChangeFinished = {
-                    onTapSound()
-                    brightnessRestoreJob?.cancel()
-                    brightnessRestoreJob = scope.launch {
-                        delay(1_000L)
-                        settings.setBrightnessPreview(null)
-                    }
-                },
-                valueRange = NightModeMinBrightness..NightModeMaxBrightness,
-                colors = whiteSliderColors(),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun EarthquakeTestContent(
-    onEewTest: () -> Unit,
-    onEarthquakeIntensityTest: (Int?) -> Unit,
-    onEarthquakeIntensityUpdateTest: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    MenuSubpageColumn(title = "地震情報", modifier = modifier) {
-SettingsItem(
-            title = "緊急地震速報テスト",
-            subtitle = "全画面警告と読み上げ",
-            onClick = onEewTest,
-        )
-        SettingsItem(
-            title = "震度情報テスト（順送り）",
-            subtitle = "1→2→3→4→5弱→5強→6弱→6強→7",
-            onClick = { onEarthquakeIntensityTest(null) },
-        )
-        SettingsItem(
-            title = "震度情報テスト（震度3）",
-            subtitle = "初報",
-            onClick = { onEarthquakeIntensityTest(30) },
-        )
-        SettingsItem(
-            title = "震度情報テスト（震度5弱）",
-            subtitle = "初報",
-            onClick = { onEarthquakeIntensityTest(45) },
-        )
-        SettingsItem(
-            title = "震度情報テスト（震度5強）",
-            subtitle = "初報",
-            onClick = { onEarthquakeIntensityTest(50) },
-        )
-        SettingsItem(
-            title = "震度情報テスト（震度7）",
-            subtitle = "初報",
-            onClick = { onEarthquakeIntensityTest(70) },
-        )
-        SettingsItem(
-            title = "震度更新テスト",
-            subtitle = "震度3のあと5強へ更新",
-            onClick = onEarthquakeIntensityUpdateTest,
-        )
-    }
-}
-
-@Composable
-private fun WeatherCalendarTestContent(
-    onMorningBriefTest: () -> Unit,
-    onNoonNoticeTest: () -> Unit,
-    onLateNoticeTest: () -> Unit,
-    onSunsetTest: () -> Unit,
-    onMemorialAnnounceTest: () -> Unit,
-    onQuoteAnnounceTest: () -> Unit,
-    onExpirationAnnounceTest: () -> Unit,
-    onWeatherAnnounceTest: (WeatherAnnounceKind) -> Unit,
-    onStepsAnnounceTest: () -> Unit,
-    onCalendarAnnounceTest: (CalendarAnnounceKind) -> Unit,
-    onCalendarSoonTest: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    MenuSubpageColumn(title = "デイリー通知", modifier = modifier) {
-        Text(
-            text = "時報のあと",
-            color = Color.White,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-        SettingsItem(
-            title = "朝のまとめ",
-            subtitle = "今日の天気、今日の予定、運行、今日のごみ、賞味期限",
-            onClick = onMorningBriefTest,
-        )
-        SettingsItem(
-            title = "昼のまとめ",
-            subtitle = "記念日、このあとの天気、このあとの予定、賞味期限、格言",
-            onClick = onNoonNoticeTest,
-        )
-        SettingsItem(
-            title = "日の入り",
-            subtitle = "読み上げのあと、このあとの天気と予定",
-            onClick = onSunsetTest,
-        )
-        SettingsItem(
-            title = "夜の通知",
-            subtitle = "歩数、明日の天気、明日の予定、明日のごみ、賞味期限",
-            onClick = onLateNoticeTest,
-        )
-        Text(
-            text = "個別の読み上げ",
-            color = Color.White,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(top = 16.dp),
-        )
-        ReadoutGenreLabel("天気")
-        SettingsItem(
-            title = "今日の天気（朝）",
-            subtitle = "天気予報読み上げテスト",
-            onClick = { onWeatherAnnounceTest(WeatherAnnounceKind.Today) },
-        )
-        SettingsItem(
-            title = "このあとの天気（昼）",
-            subtitle = "天気予報読み上げテスト",
-            onClick = { onWeatherAnnounceTest(WeatherAnnounceKind.RestOfToday) },
-        )
-        SettingsItem(
-            title = "明日の天気（夜）",
-            subtitle = "天気予報読み上げテスト",
-            onClick = { onWeatherAnnounceTest(WeatherAnnounceKind.Tomorrow) },
-        )
-        ReadoutGenreLabel("予定")
-        SettingsItem(
-            title = "今日の予定（朝）",
-            subtitle = "カレンダー読み上げテスト",
-            onClick = { onCalendarAnnounceTest(CalendarAnnounceKind.Today) },
-        )
-        SettingsItem(
-            title = "このあとの予定（昼）",
-            subtitle = "カレンダー読み上げテスト",
-            onClick = { onCalendarAnnounceTest(CalendarAnnounceKind.RestOfToday) },
-        )
-        SettingsItem(
-            title = "明日の予定（夜）",
-            subtitle = "カレンダー読み上げテスト",
-            onClick = { onCalendarAnnounceTest(CalendarAnnounceKind.Tomorrow) },
-        )
-        SettingsItem(
-            title = "15分前",
-            subtitle = "まもなく予定の読み上げ",
-            onClick = onCalendarSoonTest,
-        )
-        ReadoutGenreLabel("賞味期限")
-        SettingsItem(
-            title = "期限が近いもの",
-            subtitle = "賞味期限の読み上げ",
-            onClick = onExpirationAnnounceTest,
-        )
-        ReadoutGenreLabel("記念日")
-        SettingsItem(
-            title = "今日の記念日",
-            subtitle = "認定記念日の読み上げ",
-            onClick = onMemorialAnnounceTest,
-        )
-        ReadoutGenreLabel("歩数")
-        SettingsItem(
-            title = "歩数（夜）",
-            subtitle = "今日と今週の歩数を読み上げ",
-            onClick = onStepsAnnounceTest,
-        )
-        ReadoutGenreLabel("格言")
-        SettingsItem(
-            title = "今日の格言",
-            subtitle = "ランダムに1件読み上げ",
-            onClick = onQuoteAnnounceTest,
-        )
-    }
-}
-
-@Composable
-private fun ReadoutGenreLabel(title: String) {
-    Text(
-        text = title,
-        color = Color.White.copy(alpha = 0.85f),
-        fontSize = 20.sp,
-        fontWeight = FontWeight.Medium,
-        modifier = Modifier.padding(top = 14.dp),
-    )
-}
-
-@Composable
-private fun WeatherWarningTestContent(
-    onIssueTest: (WeatherWarningSeverity) -> Unit,
-    onCancelTest: (WeatherWarningSeverity) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    MenuSubpageColumn(title = "気象警報", modifier = modifier) {
-SettingsItem(
-            title = "特別警報（大雨）",
-            onClick = { onIssueTest(WeatherWarningSeverity.Special) },
-        )
-        SettingsItem(
-            title = "危険警報（大雨）",
-            onClick = { onIssueTest(WeatherWarningSeverity.Danger) },
-        )
-        SettingsItem(
-            title = "警報（大雨）",
-            onClick = { onIssueTest(WeatherWarningSeverity.Warning) },
-        )
-        SettingsItem(
-            title = "注意報（大雨）",
-            onClick = { onIssueTest(WeatherWarningSeverity.Advisory) },
-        )
-        SettingsItem(
-            title = "解除（大雨注意報）",
-            onClick = { onCancelTest(WeatherWarningSeverity.Advisory) },
-        )
-        SettingsItem(
-            title = "解除（大雨警報）",
-            onClick = { onCancelTest(WeatherWarningSeverity.Warning) },
-        )
-        SettingsItem(
-            title = "解除（大雨危険警報）",
-            onClick = { onCancelTest(WeatherWarningSeverity.Danger) },
-        )
-        SettingsItem(
-            title = "解除（大雨特別警報）",
-            onClick = { onCancelTest(WeatherWarningSeverity.Special) },
-        )
-    }
-}
-
-@Composable
-private fun WeatherWarningContent(
-    now: LocalDateTime,
-    warnings: List<WeatherWarningItem>,
-    lastFetchedAt: LocalDateTime?,
-    modifier: Modifier = Modifier,
-) {
-    MenuSubpageColumn(title = "気象警報", modifier = modifier) {
-        Text(
-            text = "小平市",
-            color = Color.White.copy(alpha = 0.65f),
-            fontSize = 18.sp,
-        )
-        QuietLastUpdatedLabel(
-            text = formatLastUpdatedLabel(lastFetchedAt, now),
-        )
-        if (warnings.isEmpty()) {
-            Text(
-                text = "発表中の警報・注意報はありません",
-                color = Color.White.copy(alpha = 0.65f),
-                fontSize = 18.sp,
-            )
-        } else {
-            warnings.forEach { item ->
-                Panel(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = item.name,
-                        color = Color.White,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Text(
-                        text = severityLabel(item.severity),
-                        color = Color.White.copy(alpha = 0.7f),
-                        fontSize = 16.sp,
-                        modifier = Modifier.padding(top = 6.dp),
-                    )
-                    if (item.detailTexts.isNotEmpty()) {
-                        Text(
-                            text = item.detailTexts.joinToString("、"),
-                            color = Color.White.copy(alpha = 0.75f),
-                            fontSize = 16.sp,
-                            modifier = Modifier.padding(top = 6.dp),
-                        )
-                    }
-                    item.reportAt?.let { at ->
-                        Text(
-                            text = "発表 ${at.hour}:${at.minute.toString().padStart(2, '0')}",
-                            color = Color.White.copy(alpha = 0.45f),
-                            fontSize = 15.sp,
-                            modifier = Modifier.padding(top = 8.dp),
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-private fun severityLabel(severity: WeatherWarningSeverity): String {
-    return when (severity) {
-        WeatherWarningSeverity.Special -> "特別警報"
-        WeatherWarningSeverity.Danger -> "危険警報"
-        WeatherWarningSeverity.Warning -> "警報"
-        WeatherWarningSeverity.Advisory -> "注意報"
     }
 }
 
@@ -2378,39 +1089,18 @@ private fun JihouTestContent(
     onTapSound: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var selectedSeason by remember { mutableStateOf(JihouSeason.Normal) }
-    val seasons = remember { JihouSeason.entries.toList() }
-    val specials = remember(selectedSeason) { selectedSeason.specialIntros() }
     MenuSubpageColumn(title = "時報テスト", modifier = modifier) {
-        Text(
-            text = "モード",
-            color = Color.White.copy(alpha = 0.7f),
-            fontSize = 18.sp,
-        )
-        seasons.forEach { season ->
-            val selected = season == selectedSeason
-            SettingsItem(
-                title = season.displayName,
-                subtitle = if (selected) "選択中" else "タップで選択",
-                selected = selected,
-                onClick = {
-                    onTapSound()
-                    selectedSeason = season
-                },
-            )
-        }
         Text(
             text = "再生",
             color = Color.White.copy(alpha = 0.7f),
             fontSize = 18.sp,
-            modifier = Modifier.padding(top = 8.dp),
         )
         SettingsItem(
             title = "ランダム再生",
             subtitle = "四半期メロディをランダムに1本",
             onClick = {
                 onTapSound()
-                chimeController.playTestRandom(selectedSeason)
+                chimeController.playTestRandom()
             },
         )
         listOf(0, 15, 30, 45).forEach { minute ->
@@ -2420,7 +1110,7 @@ private fun JihouTestContent(
                 subtitle = "メロディと時刻読み上げ",
                 onClick = {
                     onTapSound()
-                    chimeController.playTestQuarter(minute, selectedSeason)
+                    chimeController.playTestQuarter(minute)
                 },
             )
         }
@@ -2430,7 +1120,7 @@ private fun JihouTestContent(
             fontSize = 18.sp,
             modifier = Modifier.padding(top = 8.dp),
         )
-        specials.forEach { intro ->
+        JihouSpecialIntros.forEach { intro ->
             SettingsItem(
                 title = intro.timeLabel,
                 subtitle = "イントロ → 時報メロディ → 読み上げ",
@@ -2439,261 +1129,9 @@ private fun JihouTestContent(
                     chimeController.playTestSpecial(
                         hour = intro.hour,
                         minute = intro.minute,
-                        testSeason = selectedSeason,
                     )
                 },
             )
-        }
-    }
-}
-
-@Composable
-private fun WeatherContent(
-    now: LocalDateTime,
-    repository: WeatherRepository,
-    weatherLastFetchedAt: LocalDateTime?,
-    earthquakeLastPolledAt: LocalDateTime?,
-    onTapSound: () -> Unit,
-    onErrorSound: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var days by remember { mutableStateOf<List<DailyWeather>?>(null) }
-    var todayAstro by remember { mutableStateOf<DailyWeather?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var loading by remember { mutableStateOf(true) }
-    var requestId by remember { mutableIntStateOf(0) }
-    val scope = rememberCoroutineScope()
-
-    fun loadForecast(forceRefresh: Boolean) {
-        val id = requestId + 1
-        requestId = id
-        loading = true
-        error = null
-        scope.launch {
-            val result = withContext(Dispatchers.IO) {
-                repository.loadForecastResult(now, forceRefresh = forceRefresh)
-            }
-            if (id != requestId) {
-                return@launch
-            }
-            val forecast = result.forecast
-            if (forecast != null) {
-                days = repository.menuDays(forecast, now.toLocalDate())
-                todayAstro = forecast.daily.firstOrNull { it.date == now.toLocalDate() }
-                error = null
-            } else if (days == null) {
-                error = "天気を取得できませんでした"
-            }
-            if (result.fetchFailed && InternetConnectivity.hasInternet()) {
-                onErrorSound()
-            }
-            loading = false
-        }
-    }
-
-    LaunchedEffect(now.toLocalDate()) {
-        loadForecast(forceRefresh = true)
-    }
-    val dayLabels = listOf("今日", "明日", "明後日")
-    val moon = remember(now.toLocalDate()) { moonPhaseInfo(now.toLocalDate()) }
-    val sunFormatter = remember { DateTimeFormatter.ofPattern("H:mm") }
-    MenuSubpageColumn(
-        title = "天気予報",
-        modifier = modifier,
-        headerAction = {
-            RefreshChip(
-                enabled = !loading,
-                onClick = {
-                    onTapSound()
-                    loadForecast(forceRefresh = true)
-                },
-            )
-        },
-    ) {
-        Text(
-            text = "小平市",
-            color = Color.White.copy(alpha = 0.65f),
-            fontSize = 18.sp,
-        )
-        QuietLastUpdatedLabel(
-            text = "天気 ${formatLastUpdatedLabel(weatherLastFetchedAt, now)}",
-        )
-        QuietLastUpdatedLabel(
-            text = "地震 ${formatLastUpdatedLabel(earthquakeLastPolledAt, now)}",
-        )
-        WeatherAstroPanel(
-            now = now,
-            sunrise = todayAstro?.sunrise,
-            sunset = todayAstro?.sunset,
-            moonLabel = moon.label,
-            moonIlluminationPercent = moon.illuminationPercent,
-            sunFormatter = sunFormatter,
-        )
-        when {
-            loading && days == null -> {
-                Text(
-                    text = "読み込み中…",
-                    color = Color.White.copy(alpha = 0.65f),
-                    fontSize = 18.sp,
-                )
-            }
-            error != null && days == null -> {
-                Text(
-                    text = error.orEmpty(),
-                    color = Color.White.copy(alpha = 0.65f),
-                    fontSize = 18.sp,
-                )
-            }
-            else -> {
-                val items = days.orEmpty()
-                if (items.isEmpty()) {
-                    Text(
-                        text = "表示できる予報がありません",
-                        color = Color.White.copy(alpha = 0.65f),
-                        fontSize = 18.sp,
-                    )
-                } else {
-                    items.forEachIndexed { index, day ->
-                        WeatherDayRow(
-                            label = dayLabels.getOrElse(index) { day.date.toString() },
-                            day = day,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun WeatherAstroPanel(
-    now: LocalDateTime,
-    sunrise: LocalTime?,
-    sunset: LocalTime?,
-    moonLabel: String,
-    moonIlluminationPercent: Int,
-    sunFormatter: DateTimeFormatter,
-) {
-    val daylight = daylightRemainingLabel(now, sunrise, sunset)
-    Panel(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top,
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = "日の出・日の入り",
-                    color = Color.White.copy(alpha = 0.7f),
-                    fontSize = 16.sp,
-                )
-                Text(
-                    text = "日の出 ${sunrise?.format(sunFormatter) ?: "--:--"}",
-                    color = Color.White,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-                Text(
-                    text = "日の入り ${sunset?.format(sunFormatter) ?: "--:--"}",
-                    color = Color.White,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-                if (daylight != null) {
-                    Text(
-                        text = daylight,
-                        color = Color.White.copy(alpha = 0.75f),
-                        fontSize = 16.sp,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                }
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = "月齢",
-                    color = Color.White.copy(alpha = 0.7f),
-                    fontSize = 16.sp,
-                )
-                Text(
-                    text = moonLabel,
-                    color = Color.White,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(top = 6.dp),
-                )
-                Text(
-                    text = "照らされ ${moonIlluminationPercent}%",
-                    color = Color.White.copy(alpha = 0.65f),
-                    fontSize = 16.sp,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun QuietLastUpdatedLabel(text: String) {
-    Text(
-        text = text,
-        color = Color.White.copy(alpha = 0.4f),
-        fontSize = 15.sp,
-    )
-}
-
-@Composable
-private fun WeatherDayRow(
-    label: String,
-    day: DailyWeather,
-) {
-    val max = day.temperatureMaxC.roundToInt()
-    val min = day.temperatureMinC.roundToInt()
-    val weatherText = weatherDescriptionJa(day.weatherCode)
-    Panel(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(20.dp),
-        ) {
-            Text(
-                text = label,
-                color = Color.White,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.width(72.dp),
-            )
-            Column(
-                modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                WeatherIcon(
-                    weatherCode = day.weatherCode,
-                    size = 72.dp,
-                )
-                Text(
-                    text = weatherText,
-                    color = Color.White.copy(alpha = 0.8f),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Medium,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = "最高 $max℃",
-                    color = Color(0xFFFF8A80),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-                Text(
-                    text = "最低 $min℃",
-                    color = Color(0xFF82B1FF),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
         }
     }
 }
@@ -2701,7 +1139,6 @@ private fun WeatherDayRow(
 @Composable
 private fun CalendarContent(
     now: LocalDateTime,
-    settings: CalendarSettings,
     repository: CalendarRepository,
     hasPermission: Boolean,
     onOpenAppSettings: () -> Unit,
@@ -2709,15 +1146,14 @@ private fun CalendarContent(
 ) {
     var sections by remember { mutableStateOf<CalendarDaySections?>(null) }
     var calendars by remember { mutableStateOf<List<DeviceCalendar>>(emptyList()) }
-    LaunchedEffect(hasPermission, settings.disabledCalendarIds, now.toLocalDate()) {
+    LaunchedEffect(hasPermission, now.toLocalDate()) {
         if (!hasPermission) {
             sections = null
             return@LaunchedEffect
         }
         val loaded = withContext(Dispatchers.IO) {
             val all = repository.loadCalendars()
-            val enabledIds = settings.enabledIdsAmong(all)
-            all to repository.loadMenuSections(enabledIds, now)
+            all to repository.loadMenuSections(all.map { it.id }.toSet(), now)
         }
         calendars = loaded.first
         sections = loaded.second
@@ -2864,92 +1300,6 @@ private fun CalendarEventRow(
 }
 
 @Composable
-private fun CalendarSettingsContent(
-    settings: CalendarSettings,
-    repository: CalendarRepository,
-    hasPermission: Boolean,
-    onRequestPermission: () -> Unit,
-    onTapSound: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var calendars by remember { mutableStateOf<List<DeviceCalendar>>(emptyList()) }
-    LaunchedEffect(hasPermission) {
-        if (!hasPermission) {
-            calendars = emptyList()
-            return@LaunchedEffect
-        }
-        calendars = withContext(Dispatchers.IO) { repository.loadCalendars() }
-    }
-    MenuSubpageColumn(title = "カレンダー設定", modifier = modifier) {
-        Text(
-            text = "読み上げと一覧に使うカレンダーを選んでください",
-            color = Color.White.copy(alpha = 0.65f),
-            fontSize = 18.sp,
-        )
-        if (!hasPermission) {
-            SettingsItem(
-                title = "カレンダーへのアクセスを許可",
-                subtitle = "設定を変更するために必要です",
-                onClick = onRequestPermission,
-            )
-            return@MenuSubpageColumn
-        }
-        if (calendars.isEmpty()) {
-            Text(
-                text = "カレンダーが見つかりません",
-                color = Color.White.copy(alpha = 0.65f),
-                fontSize = 18.sp,
-            )
-            return@MenuSubpageColumn
-        }
-        calendars.forEach { calendar ->
-            val enabled = settings.isEnabled(calendar.id)
-            Panel(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Text(
-                            text = calendar.displayName,
-                            color = Color.White,
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Medium,
-                        )
-                        calendar.accountName?.let { account ->
-                            Text(
-                                text = account,
-                                color = Color.White.copy(alpha = 0.65f),
-                                fontSize = 16.sp,
-                            )
-                        }
-                    }
-                    Switch(
-                        checked = enabled,
-                        onCheckedChange = { checked ->
-                            onTapSound()
-                            settings.setEnabled(calendar.id, checked)
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = Color(0xFF3DDC84),
-                            checkedBorderColor = Color(0xFF3DDC84),
-                            uncheckedThumbColor = Color.White.copy(alpha = 0.7f),
-                            uncheckedTrackColor = Color.White.copy(alpha = 0.16f),
-                            uncheckedBorderColor = Color.White.copy(alpha = 0.28f),
-                        ),
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun NotificationSettingsContent(
     settings: NotificationAnnounceSettings,
     onTapSound: () -> Unit,
@@ -2989,110 +1339,20 @@ private fun NotificationSettingsContent(
 
 @Composable
 private fun JihouSettingsContent(
-    now: LocalDateTime,
     settings: JihouSettings,
-    onOpenTodayTheme: () -> Unit,
     onTapSound: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val automatic = settings.automaticSeason(now)
-    val effective = settings.effectiveSeason(now)
-    val hasOverride = settings.hasTodayOverride(now)
     MenuSubpageColumn(title = "時報設定", modifier = modifier) {
-Panel(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "時報",
-                        color = Color.White,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Text(
-                        text = if (settings.enabled) "オン" else "オフ",
-                        color = Color.White.copy(alpha = 0.65f),
-                        fontSize = 18.sp,
-                    )
-                }
-                Switch(
-                    checked = settings.enabled,
-                    onCheckedChange = { enabled ->
-                        onTapSound()
-                        settings.updateEnabled(enabled)
-                    },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = Color(0xFF3DDC84),
-                        checkedBorderColor = Color(0xFF3DDC84),
-                        uncheckedThumbColor = Color.White.copy(alpha = 0.7f),
-                        uncheckedTrackColor = Color.White.copy(alpha = 0.16f),
-                        uncheckedBorderColor = Color.White.copy(alpha = 0.28f),
-                    ),
-                )
-            }
-        }
-        SettingsItem(
-            title = "今日だけ切り替え",
-            subtitle = if (hasOverride) {
-                "今日のみ ${effective.displayName}（自動は${automatic.displayName}）"
-            } else {
-                "自動 ${automatic.displayName}"
-            },
-            onClick = onOpenTodayTheme,
-        )
-    }
-}
-
-@Composable
-private fun JihouTodayThemeContent(
-    now: LocalDateTime,
-    settings: JihouSettings,
-    onTapSound: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val automatic = settings.automaticSeason(now)
-    val hasOverride = settings.hasTodayOverride(now)
-    val overrideSeason = settings.todayOverrideSeason.takeIf { hasOverride }
-    val seasons = remember { JihouSeason.entries.toList() }
-    MenuSubpageColumn(title = "今日だけ切り替え", modifier = modifier) {
-        Text(
-            text = "今日のテーマ日だけ使うテーマを選びます。翌日6時で自動に戻ります。",
-            color = Color.White.copy(alpha = 0.65f),
-            fontSize = 16.sp,
-        )
-        SettingsItem(
-            title = "自動",
-            subtitle = if (!hasOverride) {
-                "選択中（${automatic.displayName}）"
-            } else {
-                "自動判定に戻す（${automatic.displayName}）"
-            },
-            selected = !hasOverride,
-            onClick = {
+        SettingsToggle(
+            title = "時報",
+            subtitle = if (settings.enabled) "オン" else "オフ",
+            checked = settings.enabled,
+            onCheckedChange = { enabled ->
                 onTapSound()
-                settings.clearTodayOverride()
+                settings.updateEnabled(enabled)
             },
         )
-        seasons.forEach { season ->
-            val selected = overrideSeason == season
-            SettingsItem(
-                title = season.displayName,
-                subtitle = when {
-                    selected -> "選択中"
-                    season == automatic -> "自動と同じ"
-                    else -> "今日だけこのテーマ"
-                },
-                selected = selected,
-                onClick = {
-                    onTapSound()
-                    settings.setTodayOverride(season, now)
-                },
-            )
-        }
     }
 }
 
@@ -3367,7 +1627,6 @@ private fun ControlPanel(
         }
     }
 }
-
 
 @Composable
 private fun MenuSubpageColumn(

@@ -8,25 +8,15 @@ import kotlin.math.floor
 
 /**
  * 日本の国民の祝日（振替休日・国民の休日含む）の簡易判定。
- * 時報テーマ切替・日付読み上げ用。法令の厳密な再計算が必要な場合は更新する。
+ * 日付表示・読み上げ用。法令の厳密な再計算が必要な場合は更新する。
+ * 祝日名。祝日でなければ null。
  */
-fun isJapanesePublicHoliday(date: LocalDate): Boolean {
-    return japaneseHolidayName(date) != null
-}
-
-/** 祝日名。祝日でなければ null。 */
 fun japaneseHolidayName(date: LocalDate): String? {
     return japaneseHolidaysIn(date.year)[date]
 }
 
 internal fun japaneseHolidaysOf(year: Int): Map<LocalDate, String> {
     return japaneseHolidaysIn(year)
-}
-
-fun isWeekendOrHoliday(date: LocalDate): Boolean {
-    return date.dayOfWeek == DayOfWeek.SATURDAY ||
-        date.dayOfWeek == DayOfWeek.SUNDAY ||
-        isJapanesePublicHoliday(date)
 }
 
 private fun japaneseHolidaysIn(year: Int): Map<LocalDate, String> {

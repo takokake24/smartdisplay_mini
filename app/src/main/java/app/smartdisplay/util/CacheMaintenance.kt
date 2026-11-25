@@ -1,32 +1,16 @@
 package app.smartdisplay.util
 
-import app.smartdisplay.bus.BusTimetableRepository
-import app.smartdisplay.bus.busServiceDate
-import app.smartdisplay.train.TrainTimetableRepository
-import app.smartdisplay.weather.WeatherRepository
 import java.time.Duration
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
 
 /**
- * 機能上消してよいメモリキャッシュを掃除する。
- * - 鉄道時刻表・バス時刻表: 営業日（2時区切り）が変わったら破棄
- * - 天気予報: 取得日が今日でないものだけ削除
- * - 通信ログ: 直近3時間より古いものを削除
+ * 通信ログのうち、直近3時間より古いものを削除する。
  * 設定（SharedPreferences）は永続データなので対象外。
  *
  * 実行タイミングは起動からの経過ではなく、0時・3時・6時…の正時。
  */
-fun pruneAppCaches(
-    trainTimetableRepository: TrainTimetableRepository,
-    busTimetableRepository: BusTimetableRepository,
-    weatherRepository: WeatherRepository,
-    now: LocalDateTime = LocalDateTime.now(),
-) {
-    val serviceDate = busServiceDate(now)
-    trainTimetableRepository.pruneExpired(serviceDate)
-    busTimetableRepository.pruneExpired(serviceDate)
-    weatherRepository.pruneExpired(now)
+fun pruneAppCaches(now: LocalDateTime = LocalDateTime.now()) {
     NetworkLog.prune(now)
 }
 

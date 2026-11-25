@@ -7,24 +7,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import app.smartdisplay.speech.AnnouncementGate
 import app.smartdisplay.speech.SpeechSpeaker
-import java.time.LocalDateTime
 
 @Composable
 fun rememberHourlyChimeController(
     speaker: SpeechSpeaker,
     announcementGate: AnnouncementGate,
     enabled: Boolean,
-    settings: JihouSettings,
-    playbackScale: (LocalDateTime) -> Float = { _ -> 1f },
 ): HourlyChimeController {
     val context = LocalContext.current
-    val controller = remember(speaker, announcementGate, settings) {
+    val controller = remember(speaker, announcementGate) {
         HourlyChimeController(
             context = context.applicationContext,
             speaker = speaker,
             announcementGate = announcementGate,
-            seasonFor = { at -> settings.effectiveSeason(at) },
-            playbackScale = playbackScale,
             initiallyEnabled = enabled,
         )
     }

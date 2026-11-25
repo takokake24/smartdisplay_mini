@@ -4,7 +4,6 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
-import app.smartdisplay.R
 import app.smartdisplay.speech.AnnouncementGate
 import app.smartdisplay.speech.SpeechSpeaker
 import app.smartdisplay.speech.breathAtHalfWidthSpace
@@ -14,7 +13,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -29,9 +27,7 @@ class HourlyChimeController(
     context: Context,
     private val speaker: SpeechSpeaker,
     private val announcementGate: AnnouncementGate,
-    private val seasonFor: (LocalDateTime) -> JihouSeason = { JihouSeason.Normal },
     private val zoneId: ZoneId = ZoneId.systemDefault(),
-    private val playbackScale: (LocalDateTime) -> Float = { _ -> 1f },
     initiallyEnabled: Boolean = true,
 ) {
     private val appContext = context.applicationContext
@@ -45,19 +41,9 @@ class HourlyChimeController(
     private var queuedPlayer: MediaPlayer? = null
     private var lastAnnouncedKey: String? = null
     private var enabled: Boolean = initiallyEnabled
-    @Volatile
-    private var testPlayback = false
-    private var chimeAt: LocalDateTime? = null
     private var suspendedByExternalInterrupt: Boolean = false
-    private var legacyInterrupt: Boolean = false
-    private var awayAlertHold: Boolean = false
     private var soundTestHold: Boolean = false
     private var currentPlaybackDone: CompletableDeferred<Unit>? = null
-    private var onChimeStarted: ((LocalDateTime) -> Unit)? = null
-    private var onTimeAnnounced: ((LocalDateTime) -> Unit)? = null
-    private var onAfterTimeAnnounce: (suspend (LocalDateTime) -> Unit)? = null
-    private var previewPlayer: MediaPlayer? = null
-    private var previewStopJob: Job? = null
 
     init {
         duckJob = scope.launch {
@@ -66,100 +52,6 @@ class HourlyChimeController(
                     applyPlaybackVolumeLocked(ducked = speaking)
                 }
             }
-        }
-    }
-
-    /** 時報の音が鳴り始めたとき。メロディを省略して時刻だけ読むときも、読み上げの前に呼ぶ。 */
-    fun setOnChimeStarted(listener: ((LocalDateTime) -> Unit)?) {
-        onChimeStarted = listener
-    }
-
-    fun setOnAfterTimeAnnounce(listener: (suspend (LocalDateTime) -> Unit)?) {
-        onAfterTimeAnnounce = listener
-    }
-
-    /** 時刻の読み上げが終わったとき。続く案内の前。 */
-    fun setOnTimeAnnounced(listener: ((LocalDateTime) -> Unit)?) {
-        onTimeAnnounced = listener
-    }
-
-    private fun notifyChimeStarted(time: LocalDateTime) {
-        runCatching { onChimeStarted?.invoke(time) }
-    }
-
-    private fun notifyTimeAnnounced(time: LocalDateTime) {
-        runCatching { onTimeAnnounced?.invoke(time) }
-    }
-
-    /** ナイトモードの時報音量を、通常の時報と同じ割合で短く鳴らす。 */
-    fun previewChimeVolume(scale: Float) {
-        val volume = NormalVolume * scale.coerceIn(0f, 1f)
-        previewStopJob?.cancel()
-        previewStopJob = scope.launch {
-            val player = MediaPlayer.create(appContext, R.raw.jihou_normal_1) ?: return@launch
-            player.setAudioAttributes(chimeAudioAttributes())
-            player.setVolume(volume, volume)
-            player.setOnCompletionListener {
-                scope.launch {
-                    if (previewPlayer === player) {
-                        previewPlayer = null
-                        releaseOne(player)
-                    }
-                }
-            }
-            stopVolumePreviewPlayer()
-            previewPlayer = player
-            if (!runCatching { player.start() }.isSuccess) {
-                previewPlayer = null
-                releaseOne(player)
-                return@launch
-            }
-            try {
-                delay(PreviewChimeMs)
-            } finally {
-                if (previewPlayer === player) {
-                    stopVolumePreviewPlayer()
-                }
-            }
-        }
-    }
-
-    fun stopVolumePreview() {
-        previewStopJob?.cancel()
-        previewStopJob = null
-        stopVolumePreviewPlayer()
-    }
-
-    private fun stopVolumePreviewPlayer() {
-        val player = previewPlayer ?: return
-        previewPlayer = null
-        releaseOne(player)
-    }
-
-    /**
-     * 緊急地震速報など最優先の割り込み用。
-     * メロディと時報ループを止め、表示解除後に [resumeAfterInterrupt] で再開する。
-     */
-    fun interruptPlayback() {
-        legacyInterrupt = true
-        syncExternalInterrupt()
-        stopExternalPlayback()
-    }
-
-    /**
-     * 外出アラートのあいだ時報を止める。
-     * 緊急地震速報の [resumeAfterInterrupt] では解けない。
-     */
-    fun holdAwayAlert(held: Boolean) {
-        val changed = awayAlertHold != held
-        awayAlertHold = held
-        syncExternalInterrupt()
-        if (held) {
-            stopExternalPlayback()
-            return
-        }
-        if (changed && !suspendedByExternalInterrupt) {
-            start()
         }
     }
 
@@ -177,17 +69,8 @@ class HourlyChimeController(
         }
     }
 
-    /** [interruptPlayback] 後に時報スケジュールを再開する。外出アラート中は再開しない。 */
-    fun resumeAfterInterrupt() {
-        legacyInterrupt = false
-        syncExternalInterrupt()
-        if (!suspendedByExternalInterrupt && enabled && loopJob?.isActive != true && testJob?.isActive != true) {
-            start()
-        }
-    }
-
     private fun syncExternalInterrupt() {
-        suspendedByExternalInterrupt = legacyInterrupt || awayAlertHold || soundTestHold
+        suspendedByExternalInterrupt = soundTestHold
     }
 
     private fun stopExternalPlayback() {
@@ -239,28 +122,19 @@ class HourlyChimeController(
         }
     }
 
-    private fun currentSeason(at: LocalDateTime = LocalDateTime.now(zoneId)): JihouSeason {
-        return seasonFor(at)
-    }
-
     /** 四半期メロディをランダムに1本鳴らしてから、現在時刻を読み上げる。 */
-    fun playTest(testSeason: JihouSeason = currentSeason()) {
-        playTestRandom(testSeason)
-    }
-
-    fun playTestRandom(testSeason: JihouSeason = currentSeason()) {
-        runTestSequence(testSeason) { selected ->
-            val resId = selected.soundResId((1..4).random())
-            awaitPlayFull(resId)
+    fun playTestRandom() {
+        runTestSequence {
+            awaitPlayFull(melodyResId((1..4).random()))
             speakTestAnnouncement(LocalDateTime.now(zoneId))
         }
     }
 
     /** 0 / 15 / 30 / 45 分のいずれかのメロディを鳴らして読み上げる。 */
-    fun playTestQuarter(minute: Int, testSeason: JihouSeason = currentSeason()) {
+    fun playTestQuarter(minute: Int) {
         val quarter = quarterIndexForMinute(minute) ?: return
-        runTestSequence(testSeason) { selected ->
-            awaitPlayFull(selected.soundResId(quarter))
+        runTestSequence {
+            awaitPlayFull(melodyResId(quarter))
             val announceAt = LocalDateTime.now(zoneId)
                 .withMinute(minute)
                 .withSecond(0)
@@ -276,12 +150,11 @@ class HourlyChimeController(
     fun playTestSpecial(
         hour: Int,
         minute: Int = 0,
-        testSeason: JihouSeason = currentSeason(),
     ) {
-        val introResId = testSeason.introSoundResId(hour, minute) ?: return
+        val introResId = introSoundResId(hour, minute) ?: return
         val quarter = quarterIndexForMinute(minute) ?: return
-        runTestSequence(testSeason) { selected ->
-            awaitPlayGapless(introResId, selected.soundResId(quarter))
+        runTestSequence {
+            awaitPlayGapless(introResId, melodyResId(quarter))
             val announceAt = LocalDateTime.now(zoneId)
                 .withHour(hour)
                 .withMinute(minute)
@@ -291,56 +164,7 @@ class HourlyChimeController(
         }
     }
 
-    /**
-     * 指定時刻の時報（イントロがあればそのあとメロディ）を最後まで鳴らし、時刻を読み上げてから戻る。
-     * 正時は分を読まない。3の倍数時は日付・曜日・行事のあとに時刻を読む。
-     */
-    suspend fun playScheduledChime(hour: Int, minute: Int) {
-        val quarter = quarterIndexForMinute(minute) ?: return
-        if (testJob?.isActive == true) {
-            return
-        }
-        val shouldResume = enabled
-        loopJob?.cancel()
-        loopJob = null
-        val job = currentCoroutineContext()[Job]
-        testJob = job
-        announcementGate.setChimeSequenceActive(true)
-        chimeAt = LocalDateTime.now(zoneId)
-            .withHour(hour)
-            .withMinute(minute)
-            .withSecond(0)
-            .withNano(0)
-        try {
-            val selected = currentSeason()
-            val introResId = selected.introSoundResId(hour, minute)
-            if (introResId != null) {
-                awaitPlayGapless(introResId, selected.soundResId(quarter))
-            } else {
-                awaitPlayFull(selected.soundResId(quarter))
-            }
-            val announceAt = LocalDateTime.now(zoneId)
-                .withHour(hour)
-                .withMinute(minute)
-                .withSecond(0)
-                .withNano(0)
-            speakTestAnnouncement(announceAt)
-        } finally {
-            chimeAt = null
-            if (testJob === job) {
-                testJob = null
-            }
-            announcementGate.setChimeSequenceActive(false)
-            if (shouldResume) {
-                start()
-            }
-        }
-    }
-
-    private fun runTestSequence(
-        testSeason: JihouSeason,
-        block: suspend (JihouSeason) -> Unit,
-    ) {
+    private fun runTestSequence(block: suspend () -> Unit) {
         if (testJob?.isActive == true) {
             return
         }
@@ -348,12 +172,10 @@ class HourlyChimeController(
             val shouldResume = enabled
             loopJob?.cancel()
             loopJob = null
-            testPlayback = true
             announcementGate.setChimeSequenceActive(true)
             try {
-                block(testSeason)
+                block()
             } finally {
-                testPlayback = false
                 announcementGate.setChimeSequenceActive(false)
                 testJob = null
                 if (shouldResume) {
@@ -369,7 +191,7 @@ class HourlyChimeController(
         ) {
             speaker.speakNow(
                 text = breathAtHalfWidthSpace(scheduledJihouAnnouncement(time)),
-                volume = speechVolume(time),
+                volume = SpeechVolume,
             )
         }
     }
@@ -384,7 +206,6 @@ class HourlyChimeController(
     }
 
     fun release() {
-        stopVolumePreview()
         stop()
         duckJob?.cancel()
         duckJob = null
@@ -395,9 +216,8 @@ class HourlyChimeController(
         val now = LocalDateTime.now(zoneId)
         val target = nextChimeTime(now)
         val quarter = quarterIndexForMinute(target.minute) ?: return
-        val season = currentSeason(target)
-        val resId = season.soundResId(quarter)
-        val introResId = season.introSoundResId(target.hour, target.minute)
+        val resId = melodyResId(quarter)
+        val introResId = introSoundResId(target.hour, target.minute)
         val chimeDurationMs = durationMs(resId).coerceAtLeast(1L)
         val introDurationMs = introResId?.let { durationMs(it).coerceAtLeast(1L) } ?: 0L
         val targetMillis = target.atZone(zoneId).toInstant().toEpochMilli()
@@ -422,23 +242,12 @@ class HourlyChimeController(
             return
         }
 
-        var externalFetchStarted = false
-        fun startExternalFetch() {
-            if (externalFetchStarted) {
-                return
-            }
-            externalFetchStarted = true
-            notifyChimeStarted(target)
-        }
-
         if (millis >= targetMillis) {
             if (lastAnnouncedKey != announceKey) {
                 lastAnnouncedKey = announceKey
                 announcementGate.setChimeSequenceActive(true)
                 try {
-                    startExternalFetch()
-                    speakScheduledTime(target)
-                    runCatching { onAfterTimeAnnounce?.invoke(target) }
+                    speakTimeWithPriority(target)
                 } finally {
                     announcementGate.setChimeSequenceActive(false)
                 }
@@ -449,7 +258,6 @@ class HourlyChimeController(
 
         // メロディは通知読み上げと並行可。読み上げ中は小さめ、完了後に戻す。
         announcementGate.setChimeSequenceActive(true)
-        chimeAt = target
         try {
             var chimeQueued = false
             if (
@@ -463,9 +271,6 @@ class HourlyChimeController(
                     sequenceStartMillis = sequenceStartMillis,
                     chimeStartMillis = chimeStartMillis,
                 )
-                if (chimeQueued) {
-                    startExternalFetch()
-                }
                 if (!enabled || suspendedByExternalInterrupt) {
                     playbackMutex.withLock { releasePlayerLocked() }
                     return
@@ -482,9 +287,7 @@ class HourlyChimeController(
                 if (millis >= targetMillis) {
                     if (lastAnnouncedKey != announceKey) {
                         lastAnnouncedKey = announceKey
-                        startExternalFetch()
-                        speakScheduledTime(target)
-                        runCatching { onAfterTimeAnnounce?.invoke(target) }
+                        speakTimeWithPriority(target)
                     }
                     return
                 }
@@ -503,7 +306,6 @@ class HourlyChimeController(
                 if (!started) {
                     return
                 }
-                startExternalFetch()
             }
 
             millis = System.currentTimeMillis()
@@ -516,14 +318,12 @@ class HourlyChimeController(
             }
             if (lastAnnouncedKey != announceKey) {
                 lastAnnouncedKey = announceKey
-                speakScheduledTime(target)
-                runCatching { onAfterTimeAnnounce?.invoke(target) }
+                speakTimeWithPriority(target)
             }
             playbackMutex.withLock {
                 releasePlayerLocked()
             }
         } finally {
-            chimeAt = null
             announcementGate.setChimeSequenceActive(false)
         }
         delay(1_000L)
@@ -760,11 +560,6 @@ class HourlyChimeController(
         player.setOnSeekCompleteListener(null)
     }
 
-    private suspend fun speakScheduledTime(target: LocalDateTime) {
-        speakTimeWithPriority(target)
-        notifyTimeAnnounced(target)
-    }
-
     /**
      * 正時の時刻読み上げ。通知の読み上げ中でも切り上げて割り込み、終わったら次の通知へ進める。
      */
@@ -774,7 +569,7 @@ class HourlyChimeController(
         ) {
             speaker.speakNow(
                 text = breathAtHalfWidthSpace(scheduledJihouAnnouncement(target)),
-                volume = speechVolume(target),
+                volume = SpeechVolume,
             )
         }
     }
@@ -893,15 +688,7 @@ class HourlyChimeController(
     private fun playbackVolume(
         ducked: Boolean = announcementGate.speechActive.value,
     ): Float {
-        val base = if (ducked) DuckVolume else NormalVolume
-        val at = chimeAt ?: LocalDateTime.now(zoneId)
-        val scale = if (testPlayback) 1f else playbackScale(at).coerceIn(0f, 1f)
-        return base * scale
-    }
-
-    private fun speechVolume(at: LocalDateTime): Float {
-        val scale = if (testPlayback) 1f else playbackScale(at).coerceIn(0f, 1f)
-        return SpeechVolume * scale
+        return if (ducked) DuckVolume else NormalVolume
     }
 
     private fun applyPlaybackVolumeLocked(ducked: Boolean) {
@@ -1019,6 +806,5 @@ class HourlyChimeController(
         const val DuckVolume = 0.16f
         /** 時報の時刻読み上げ音量 */
         const val SpeechVolume = 0.78f
-        const val PreviewChimeMs = 2_000L
     }
 }

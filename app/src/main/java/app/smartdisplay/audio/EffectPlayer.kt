@@ -86,18 +86,6 @@ class EffectPlayer(context: Context) {
         playRawAndAwait(R.raw.notice)
     }
 
-    suspend fun playAlert1() {
-        playRawAndAwait(R.raw.alert1)
-    }
-
-    suspend fun playAlert2() {
-        playRawAndAwait(R.raw.alert2)
-    }
-
-    suspend fun playSunset() {
-        playRawAndAwait(R.raw.jihou_sunset)
-    }
-
     private suspend fun playRawAndAwait(resId: Int) {
         mutex.withLock {
             withContext(Dispatchers.Main) {

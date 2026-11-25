@@ -26,7 +26,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /**
  * 他アプリの新規通知を、右半分のバナーと読み上げに載せる。
@@ -151,7 +150,6 @@ class DeviceNotificationAnnouncer(
                 NotificationSoundEffect.Notice
             },
             skipSpeech = captured.speech.isBlank(),
-            addToHistory = false,
             appIcon = icon,
             sourceLabel = captured.appName,
             speakNotBeforeElapsed = captured.postedAt + wait,

@@ -416,7 +416,7 @@ class SystemMediaHub(context: Context) {
             snapshot(id, controller, titleOverride = castTitles[id], forceRemote = true)
         }
         val all = sessions + casts + listOfNotNull(castCard)
-        _sessions.value = all.filter { it.packageName != SpotifyPackage }
+        _sessions.value = all
         _deviceNowPlaying.value = all.firstOrNull { it.playing && it.title.isNotBlank() }
             ?: all.firstOrNull { it.remote && it.title.isNotBlank() }
     }
@@ -545,7 +545,6 @@ class SystemMediaHub(context: Context) {
     }
 
     private companion object {
-        private const val SpotifyPackage = "com.spotify.music"
         private const val GoogleHomePackage = "com.google.android.apps.chromecast.app"
         private const val CastServicePackage = "com.google.android.gms"
         private const val ShuffleNone = 0

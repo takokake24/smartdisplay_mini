@@ -1,6 +1,5 @@
 package app.smartdisplay.util
 
-import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -74,52 +73,6 @@ private fun dismissToastIfCurrent(id: Long) {
 /** 画面下部中央に出て、一定時間で消えるトースト。続けて来た文は、今の表示のあとに出す。 */
 fun showOsAlert(message: String) {
     AppToast.show(message)
-}
-
-/**
- * 通信失敗の下部トースト。
- * 同じ項目は、いったん成功するまで繰り返さない。未接続のときは出さない。
- */
-object FetchFailureNotifier {
-    private val reported = mutableSetOf<String>()
-    private val gate = Any()
-
-    fun report(labels: Collection<String>): Boolean {
-        if (!InternetConnectivity.hasInternet()) {
-            return false
-        }
-        val fresh = synchronized(gate) {
-            labels.filter { it.isNotBlank() && reported.add(it) }
-        }
-        if (fresh.isEmpty()) {
-            return false
-        }
-        showOsAlert(fresh.joinToString("\n") { "${it}の取得に失敗しました" })
-        return true
-    }
-
-    fun clear(labels: Collection<String>) {
-        if (labels.isEmpty()) {
-            return
-        }
-        synchronized(gate) {
-            reported.removeAll(labels.toSet())
-        }
-    }
-}
-
-@Suppress("UNUSED_PARAMETER")
-fun showOsAlert(context: Context, message: String) {
-    showOsAlert(message)
-}
-
-fun showFetchFailureAlerts(labels: Collection<String>) {
-    FetchFailureNotifier.report(labels)
-}
-
-@Suppress("UNUSED_PARAMETER")
-fun showFetchFailureAlerts(context: Context, labels: Collection<String>) {
-    showFetchFailureAlerts(labels)
 }
 
 @Composable
