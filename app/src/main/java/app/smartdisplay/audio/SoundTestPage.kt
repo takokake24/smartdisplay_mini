@@ -60,11 +60,14 @@ fun SoundTestPage(
     val playing by player.playing.collectAsState()
     val speaking by announcementGate.speechActive.collectAsState()
     val current = clips.firstOrNull { it.resId == trackId }
-    DisposableEffect(notifications, chimeController, player, presenceGate) {
+    val stopForRevoke = remember(player) { { player.stop() } }
+    DisposableEffect(notifications, chimeController, player, presenceGate, stopForRevoke) {
         player.presenceGate = presenceGate
+        presenceGate?.addOnAudibleRevoked(stopForRevoke)
         notifications.setSoundTestHold(true)
         chimeController.holdSoundTest(true)
         onDispose {
+            presenceGate?.removeOnAudibleRevoked(stopForRevoke)
             player.stop()
             player.presenceGate = null
             notifications.setSoundTestHold(false)

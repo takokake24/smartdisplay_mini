@@ -32,6 +32,8 @@ class EffectPlayer(context: Context) {
     private var beepId = 0
     private var beepLoaded = false
     private var activeStream = 0
+    private var activePlayer: MediaPlayer? = null
+    private var activeAwait: CompletableDeferred<Unit>? = null
 
     /** 外出時の鳴動抑制。未設定なら常に鳴らす。 */
     @Volatile
@@ -110,6 +112,8 @@ class EffectPlayer(context: Context) {
                 }
                 val done = CompletableDeferred<Unit>()
                 val player = MediaPlayer.create(appContext, resId) ?: return@withContext
+                activeAwait = done
+                activePlayer = player
                 player.setAudioAttributes(
                     AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -128,6 +132,12 @@ class EffectPlayer(context: Context) {
                     player.start()
                     done.await()
                 } finally {
+                    if (activeAwait === done) {
+                        activeAwait = null
+                    }
+                    if (activePlayer === player) {
+                        activePlayer = null
+                    }
                     runCatching {
                         player.stop()
                         player.release()
@@ -137,7 +147,24 @@ class EffectPlayer(context: Context) {
         }
     }
 
+    /** イヤホン切断や外出抑制で、再生中の効果音を止める。 */
+    fun stop() {
+        if (activeStream != 0) {
+            soundPool.stop(activeStream)
+            activeStream = 0
+        }
+        activeAwait?.complete(Unit)
+        activeAwait = null
+        val player = activePlayer
+        activePlayer = null
+        if (player != null) {
+            runCatching { player.stop() }
+            runCatching { player.release() }
+        }
+    }
+
     fun release() {
+        stop()
         soundPool.release()
     }
 }

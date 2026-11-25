@@ -90,6 +90,29 @@ class HourlyChimeController(
         }
     }
 
+    /**
+     * イヤホン切断や外出抑制で、いま鳴っているメロディ／読み上げだけ止める。
+     * スケジュール自体は維持し、必要ならループを組み直す。
+     */
+    fun interruptAudible() {
+        scope.launch {
+            playbackMutex.withLock {
+                currentPlaybackDone?.complete(Unit)
+                currentPlaybackDone = null
+                releasePlayerLocked()
+            }
+            speaker.stop()
+            testJob?.cancel()
+            testJob = null
+            loopJob?.cancel()
+            loopJob = null
+            announcementGate.setChimeSequenceActive(false)
+            if (enabled && !suspendedByExternalInterrupt) {
+                start()
+            }
+        }
+    }
+
     fun start() {
         if (!enabled || suspendedByExternalInterrupt || loopJob?.isActive == true) {
             return

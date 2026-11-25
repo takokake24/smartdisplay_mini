@@ -34,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import app.smartdisplay.media.MediaNotificationListener
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * mini固有: 外出先でスピーカーから音が出ないようにする。
@@ -80,9 +81,28 @@ class SoundPresenceGate(context: Context) {
     var mayPlay by mutableStateOf(true)
         private set
 
+    private var onMayPlayChanged: ((Boolean) -> Unit)? = null
+    private val audibleRevokedListeners = CopyOnWriteArrayList<() -> Unit>()
+
     fun mayPlayNow(): Boolean {
         recompute()
         return mayPlay
+    }
+
+    fun setOnMayPlayChanged(listener: ((Boolean) -> Unit)?) {
+        onMayPlayChanged = listener
+    }
+
+    /**
+     * イヤホン／ヘッドホン切断などで、再生中の音を止めるべきときに呼ぶ。
+     * Wi-Fi接続中でも、Bluetoothから本体スピーカーへ切り替わるのを防ぐために使う。
+     */
+    fun addOnAudibleRevoked(listener: () -> Unit) {
+        audibleRevokedListeners.addIfAbsent(listener)
+    }
+
+    fun removeOnAudibleRevoked(listener: () -> Unit) {
+        audibleRevokedListeners.remove(listener)
     }
 
     fun setAwaySoundEnabled(value: Boolean) {
@@ -113,6 +133,8 @@ class SoundPresenceGate(context: Context) {
         }
         started = false
         awaySoundEnabledState = false
+        onMayPlayChanged = null
+        audibleRevokedListeners.clear()
         handler.removeCallbacks(refreshRunnable)
         wifiCallback?.let { callback ->
             connectivityManager?.runCatching { unregisterNetworkCallback(callback) }
@@ -159,7 +181,12 @@ class SoundPresenceGate(context: Context) {
 
     private fun startLinkReceiver() {
         val receiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context?, intent: Intent?) = recompute()
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
+                    notifyAudibleRevoked()
+                }
+                recompute()
+            }
         }
         linkReceiver = receiver
         val filter = IntentFilter().apply {
@@ -169,12 +196,19 @@ class SoundPresenceGate(context: Context) {
             addAction(BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED)
             addAction(BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED)
             addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
+            addAction(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             appContext.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {
             @Suppress("DEPRECATION")
             appContext.registerReceiver(receiver, filter)
+        }
+    }
+
+    private fun notifyAudibleRevoked() {
+        for (listener in audibleRevokedListeners) {
+            runCatching { listener() }
         }
     }
 
@@ -204,7 +238,7 @@ class SoundPresenceGate(context: Context) {
             return
         }
         if (!started) {
-            mayPlay = false
+            updateMayPlay(false)
             naturalAllow = false
             return
         }
@@ -216,7 +250,19 @@ class SoundPresenceGate(context: Context) {
             awaySoundEnabledState = false
         }
         naturalAllow = nextNatural
-        mayPlay = nextNatural || awaySoundEnabledState
+        updateMayPlay(nextNatural || awaySoundEnabledState)
+    }
+
+    private fun updateMayPlay(next: Boolean) {
+        if (mayPlay == next) {
+            return
+        }
+        val wasAllowed = mayPlay
+        mayPlay = next
+        onMayPlayChanged?.invoke(next)
+        if (wasAllowed && !next) {
+            notifyAudibleRevoked()
+        }
     }
 
     private fun wifiConnectedNow(): Boolean {
