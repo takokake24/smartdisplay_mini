@@ -1430,7 +1430,7 @@ private fun AudioPrioritySettingsContent(
             fontWeight = FontWeight.Medium,
         )
         Text(
-            text = "選んだアプリの音声が鳴っているあいだ、時報メロディは音量を下げ、読み上げは譲ります。",
+            text = "選んだアプリの音声が鳴っているあいだ、その音量は下げず、時報メロディは音量を下げ、読み上げは譲ります。",
             color = Color.White.copy(alpha = 0.65f),
             fontSize = 18.sp,
         )

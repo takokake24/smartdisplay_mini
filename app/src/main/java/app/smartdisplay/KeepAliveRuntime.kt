@@ -16,6 +16,13 @@ import app.smartdisplay.notification.NotificationAnnounceSettings
 import app.smartdisplay.notification.NotificationCenter
 import app.smartdisplay.speech.AnnouncementGate
 import app.smartdisplay.speech.SpeechSpeaker
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
 import kotlin.system.exitProcess
 
 /**
@@ -54,6 +61,8 @@ class KeepAliveRuntime(private val app: Application) {
     private lateinit var playbackDucker: LocalPlaybackDucker
     private lateinit var deviceAnnouncer: DeviceNotificationAnnouncer
     private lateinit var batteryAnnouncer: BatteryAnnouncer
+    private val duckScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var duckJob: Job? = null
 
     fun ensureStarted(): KeepAliveRuntime {
         synchronized(lock) {
@@ -64,15 +73,25 @@ class KeepAliveRuntime(private val app: Application) {
             effects = EffectPlayer(app)
             effects.presenceGate = presenceGate
             playbackDucker = LocalPlaybackDucker(app)
-            announcementGate = AnnouncementGate { active ->
-                playbackDucker.setDucked(active)
-            }
+            announcementGate = AnnouncementGate()
             speechSpeaker = SpeechSpeaker(app)
             jihouSettings = JihouSettings(app)
             audioPrioritySettings = AudioPrioritySettings(app)
             priorityAudioMonitor = PriorityAudioMonitor(app, audioPrioritySettings)
             audioPrioritySettings.onPackagesChanged = {
                 priorityAudioMonitor.refresh()
+            }
+            // 優先アプリ再生中は他再生をダックしない（ナビ音声などを下げない）
+            duckJob = duckScope.launch {
+                combine(
+                    announcementGate.speechActive,
+                    announcementGate.chimeSequenceActive,
+                    priorityAudioMonitor.active,
+                ) { speaking, chime, priority ->
+                    (speaking || chime) && !priority
+                }.collect { duckOthers ->
+                    playbackDucker.setDucked(duckOthers)
+                }
             }
             notificationAnnounceSettings = NotificationAnnounceSettings(app)
             batteryAnnounceSettings = BatteryAnnounceSettings(app)
@@ -175,6 +194,9 @@ class KeepAliveRuntime(private val app: Application) {
                 return
             }
             started = false
+            duckJob?.cancel()
+            duckJob = null
+            duckScope.cancel()
             runCatching { batteryAnnouncer.stop() }
             runCatching { deviceAnnouncer.stop() }
             runCatching { chimeController.release() }
