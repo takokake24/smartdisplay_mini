@@ -873,6 +873,6 @@ class HourlyChimeController(
         /** 通知読み上げ中の時報メロディ音量 */
         const val DuckVolume = 0.16f
         /** 時報の時刻読み上げ音量 */
-        const val SpeechVolume = 0.94f
+        const val SpeechVolume = 1f
     }
 }
