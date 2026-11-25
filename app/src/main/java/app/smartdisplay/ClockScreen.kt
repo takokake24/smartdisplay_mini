@@ -198,7 +198,6 @@ fun ClockScreen() {
     val presentation by notifications.presentation.collectAsState()
     val activeNotification = presentation?.notification
     val queueProgress = presentation?.queueProgress
-    val history by notifications.history.collectAsState()
 
     var showMenu by remember { mutableStateOf(false) }
     var openMenuOnMedia by remember { mutableStateOf(false) }
@@ -234,7 +233,6 @@ fun ClockScreen() {
                     chimeController = chimeController,
                     announcementGate = announcementGate,
                     notifications = notifications,
-                    history = history,
                     onBack = { showMenu = false },
                     onInteraction = { interactionToken++ },
                     onSoundTestOpen = { soundTestOpen = it },

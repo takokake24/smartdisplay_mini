@@ -22,17 +22,11 @@ data class AppNotification(
     val sourceLabel: String = "",
     /** この時刻（elapsedRealtime）まで、読み上げを始めない。0 なら待たない。 */
     val speakNotBeforeElapsed: Long = 0L,
-    val read: Boolean = false,
-) {
-    val categoryLabel: String
-        get() = sourceLabel.ifBlank { categoryLabelOf(category) }
-}
+)
 
 const val NotificationCategoryGeneral = "general"
 const val NotificationCategoryDevice = "device"
 const val ActiveNotificationTimeoutMillis = 60_000L
-const val NotificationHistoryRetentionHours = 12L
-const val NotificationHistoryPruneIntervalMillis = 60_000L
 
 data class NotificationQueueProgress(
     val current: Int,
@@ -40,12 +34,4 @@ data class NotificationQueueProgress(
 ) {
     val label: String
         get() = "$current/$total"
-}
-
-fun categoryLabelOf(category: String): String {
-    return when (category) {
-        NotificationCategoryGeneral -> "お知らせ"
-        NotificationCategoryDevice -> "アプリ"
-        else -> category
-    }
 }

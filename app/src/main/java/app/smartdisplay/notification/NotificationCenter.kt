@@ -19,8 +19,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.util.UUID
@@ -33,9 +31,9 @@ data class ActiveNotificationPresentation(
 )
 
 /**
- * 画面右半分の通知バナーと履歴をまとめて扱う。
+ * 画面右半分の通知バナーを扱う。
  * 音声案内は [AnnouncementGate] 経由で、時報など他の案内と順番に出す。
- * 複数同時に来た場合は読み上げ完了ごとに次へ遷移し、前のものは未確認のまま履歴に残す。
+ * 複数同時に来た場合は読み上げ完了ごとに次へ遷移する。
  */
 class NotificationCenter(
     private val speaker: SpeechSpeaker,
@@ -56,27 +54,12 @@ class NotificationCenter(
     private val _presentation = MutableStateFlow<ActiveNotificationPresentation?>(null)
     val presentation: StateFlow<ActiveNotificationPresentation?> = _presentation.asStateFlow()
 
-    private val _history = MutableStateFlow<List<AppNotification>>(emptyList())
-    val history: StateFlow<List<AppNotification>> = _history.asStateFlow()
-
-    private var pruneJob: Job? = null
-
-    init {
-        pruneJob = scope.launch {
-            while (isActive) {
-                pruneExpiredHistory()
-                delay(NotificationHistoryPruneIntervalMillis)
-            }
-        }
-    }
-
     fun post(
         category: String,
         title: String,
         body: String,
         speechText: String,
         alert: Boolean = true,
-        addToHistory: Boolean = true,
         soundEffect: NotificationSoundEffect = NotificationSoundEffect.Notice,
         skipSpeech: Boolean = false,
         appIcon: Bitmap? = null,
@@ -95,12 +78,7 @@ class NotificationCenter(
             appIcon = appIcon,
             sourceLabel = sourceLabel,
             speakNotBeforeElapsed = speakNotBeforeElapsed,
-            read = false,
         )
-        pruneExpiredHistory()
-        if (addToHistory) {
-            _history.update { listOf(item) + it }
-        }
         if (!alert) {
             return item.id
         }
@@ -153,90 +131,19 @@ class NotificationCenter(
     }
 
     fun dismissActiveManually() {
-        val activeId = _presentation.value?.notification?.id
         stopAlertPlayback()
         autoDismissJob?.cancel()
         autoDismissJob = null
         _presentation.value = null
-        if (activeId != null) {
-            _history.update { list -> list.filterNot { it.id == activeId } }
-        }
         ensurePresenting()
-    }
-
-    private fun dismissActive() {
-        stopAlertPlayback()
-        pendingAlerts.clear()
-        autoDismissJob?.cancel()
-        autoDismissJob = null
-        _presentation.value = null
-        resetQueueProgress()
-    }
-
-    fun markRead(id: String) {
-        _history.update { list ->
-            list.map { item ->
-                if (item.id == id) item.copy(read = true) else item
-            }
-        }
-    }
-
-    fun remove(id: String) {
-        pendingAlerts.removeAll { it.id == id }
-        deferredAlerts.removeAll { it.id == id }
-        _history.update { list -> list.filterNot { it.id == id } }
-        if (_presentation.value?.notification?.id == id) {
-            stopAlertPlayback()
-            autoDismissJob?.cancel()
-            autoDismissJob = null
-            _presentation.value = null
-            ensurePresenting()
-        } else {
-            expandBatchTotalForPending()
-            refreshPresentationProgress()
-        }
-    }
-
-    fun clearHistory() {
-        pendingAlerts.clear()
-        deferredAlerts.clear()
-        _history.value = emptyList()
-        dismissActive()
     }
 
     fun release() {
         stopAlertPlayback()
         pendingAlerts.clear()
+        deferredAlerts.clear()
         autoDismissJob?.cancel()
-        pruneJob?.cancel()
-        pruneJob = null
         scope.cancel()
-    }
-
-    private fun pruneExpiredHistory() {
-        val cutoff = LocalDateTime.now().minusHours(NotificationHistoryRetentionHours)
-        val expiredIds = _history.value
-            .asSequence()
-            .filter { it.createdAt.isBefore(cutoff) }
-            .map { it.id }
-            .toSet()
-        if (expiredIds.isEmpty()) {
-            return
-        }
-        pendingAlerts.removeAll { it.id in expiredIds }
-        deferredAlerts.removeAll { it.id in expiredIds }
-        _history.update { list -> list.filterNot { it.id in expiredIds } }
-        val activeId = _presentation.value?.notification?.id
-        if (activeId != null && activeId in expiredIds) {
-            stopAlertPlayback()
-            autoDismissJob?.cancel()
-            autoDismissJob = null
-            _presentation.value = null
-            ensurePresenting()
-        } else {
-            expandBatchTotalForPending()
-            refreshPresentationProgress()
-        }
     }
 
     private fun ensurePresenting() {

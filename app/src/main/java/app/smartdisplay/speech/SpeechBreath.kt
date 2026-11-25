@@ -14,7 +14,8 @@ private enum class TokenKind {
 
 /**
  * 半角スペースを読点にして、読み上げで一呼吸置く。連続する空白は1回にする。
- * 英語の文中はそのまま。英語のあとにスペースを挟んで日本語が続くときは読点にする。
+ * 英語の文中と、単体の英語のあとはそのまま。
+ * 日本語にくっついた英語のあとに日本語が続くときは読点にする。
  */
 fun breathAtHalfWidthSpace(text: String): String {
     if (' ' !in text) {
@@ -38,8 +39,9 @@ fun breathAtHalfWidthSpace(text: String): String {
         }
         val next = text[index]
         if (next !in BreathBreak &&
-            !isJapaneseScript(next) &&
-            (isEnglishInterior(text, spaceAt - 1, index) || followsEnglishWord(text, spaceAt - 1))
+            (isStandaloneEnglish(text, spaceAt - 1) ||
+                (!isJapaneseScript(next) &&
+                    (isEnglishInterior(text, spaceAt - 1, index) || followsEnglishWord(text, spaceAt - 1))))
         ) {
             out.append(' ')
             continue
@@ -50,6 +52,33 @@ fun breathAtHalfWidthSpace(text: String): String {
         }
     }
     return out.toString()
+}
+
+/** スペースの直前が、日本語にくっついていない英単語のとき。 */
+private fun isStandaloneEnglish(text: String, prevIndex: Int): Boolean {
+    var index = prevIndex
+    while (index >= 0) {
+        while (index >= 0 && isEnglishPunctuation(text[index])) {
+            index--
+        }
+        if (index < 0 || !isEnglishWordChar(text[index])) {
+            return false
+        }
+        var sawLetter = false
+        while (index >= 0 && isEnglishWordChar(text[index])) {
+            if (text[index] in 'A'..'Z' || text[index] in 'a'..'z') {
+                sawLetter = true
+            }
+            index--
+        }
+        if (sawLetter) {
+            return index < 0 || !isJapaneseScript(text[index])
+        }
+        while (index >= 0 && text[index] == ' ') {
+            index--
+        }
+    }
+    return false
 }
 
 private fun followsEnglishWord(text: String, prevIndex: Int): Boolean {

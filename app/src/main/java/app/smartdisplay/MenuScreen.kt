@@ -88,10 +88,8 @@ import app.smartdisplay.jihou.HourlyChimeController
 import app.smartdisplay.jihou.JihouSettings
 import app.smartdisplay.jihou.JihouSpecialIntros
 import app.smartdisplay.media.MusicContent
-import app.smartdisplay.notification.AppNotification
 import app.smartdisplay.notification.NotificationAnnounceSettings
 import app.smartdisplay.notification.NotificationCenter
-import app.smartdisplay.notification.NotificationHistoryPanel
 import app.smartdisplay.observance.ObservanceRows
 import app.smartdisplay.speech.AnnouncementGate
 import app.smartdisplay.switchbot.DeviceControlContent
@@ -125,7 +123,6 @@ private enum class MenuPage {
     DeviceControl,
     Calendar,
     Observances,
-    NotificationHistory,
     NetworkLog,
     SoundTest,
 }
@@ -138,7 +135,6 @@ fun MenuScreen(
     chimeController: HourlyChimeController,
     announcementGate: AnnouncementGate,
     notifications: NotificationCenter,
-    history: List<AppNotification>,
     onBack: () -> Unit,
     onInteraction: () -> Unit,
     onSoundTestOpen: (Boolean) -> Unit,
@@ -161,7 +157,6 @@ fun MenuScreen(
         }
     }
     val latestInteraction by rememberUpdatedState(onInteraction)
-    val unreadCount = history.count { !it.read }
     val context = LocalContext.current
     val calendarRepository = remember { CalendarRepository(context.applicationContext) }
     var hasCalendarPermission by remember {
@@ -203,7 +198,6 @@ fun MenuScreen(
             MenuPage.DeviceControl,
             MenuPage.Calendar,
             MenuPage.Observances,
-            MenuPage.NotificationHistory,
             -> page = MenuPage.Home
             MenuPage.NotificationSettings,
             MenuPage.JihouSettings,
@@ -238,7 +232,6 @@ fun MenuScreen(
     ) {
         MenuTopBar(
             now = now,
-            unreadCount = unreadCount,
             onBack = {
                 onTapSound()
                 navigateBack()
@@ -247,14 +240,6 @@ fun MenuScreen(
                 {
                     onTapSound()
                     page = MenuPage.Settings
-                }
-            } else {
-                null
-            },
-            onOpenNotifications = if (page == MenuPage.Home) {
-                {
-                    onTapSound()
-                    page = MenuPage.NotificationHistory
                 }
             } else {
                 null
@@ -394,21 +379,6 @@ fun MenuScreen(
                     .fillMaxWidth()
                     .weight(1f),
             )
-            MenuPage.NotificationHistory -> NotificationHistoryPanel(
-                items = history,
-                onItemClick = { item ->
-                    onTapSound()
-                    notifications.markRead(item.id)
-                    notifications.remove(item.id)
-                },
-                onClearAll = {
-                    onTapSound()
-                    notifications.clearHistory()
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            )
         }
     }
 }
@@ -416,10 +386,8 @@ fun MenuScreen(
 @Composable
 private fun MenuTopBar(
     now: LocalDateTime,
-    unreadCount: Int,
     onBack: () -> Unit,
     onOpenSettings: (() -> Unit)?,
-    onOpenNotifications: (() -> Unit)?,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -449,37 +417,6 @@ private fun MenuTopBar(
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Medium,
                     )
-                }
-            }
-            if (onOpenNotifications != null) {
-                Panel(onClick = onOpenNotifications) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Text(
-                            text = "通知",
-                            color = Color.White,
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Medium,
-                        )
-                        if (unreadCount > 0) {
-                            Box(
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFFE53935)),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text = unreadCount.coerceAtMost(9).toString(),
-                                    color = Color.White,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
-                        }
-                    }
                 }
             }
             Row(
