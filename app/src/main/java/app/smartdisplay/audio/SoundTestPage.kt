@@ -50,6 +50,7 @@ fun SoundTestPage(
     notifications: NotificationCenter,
     chimeController: HourlyChimeController,
     announcementGate: AnnouncementGate,
+    presenceGate: SoundPresenceGate? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -59,11 +60,13 @@ fun SoundTestPage(
     val playing by player.playing.collectAsState()
     val speaking by announcementGate.speechActive.collectAsState()
     val current = clips.firstOrNull { it.resId == trackId }
-    DisposableEffect(notifications, chimeController, player) {
+    DisposableEffect(notifications, chimeController, player, presenceGate) {
+        player.presenceGate = presenceGate
         notifications.setSoundTestHold(true)
         chimeController.holdSoundTest(true)
         onDispose {
             player.stop()
+            player.presenceGate = null
             notifications.setSoundTestHold(false)
             chimeController.holdSoundTest(false)
         }

@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import app.smartdisplay.audio.EffectPlayer
+import app.smartdisplay.audio.SoundPresenceGate
 import app.smartdisplay.speech.AnnouncementGate
 import app.smartdisplay.speech.SpeechSpeaker
 import app.smartdisplay.speech.breathAtHalfWidthSpace
@@ -39,6 +40,7 @@ class NotificationCenter(
     private val speaker: SpeechSpeaker,
     private val effects: EffectPlayer,
     private val announcementGate: AnnouncementGate,
+    private val presenceGate: SoundPresenceGate? = null,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val pendingAlerts = ArrayDeque<AppNotification>()
@@ -172,7 +174,8 @@ class NotificationCenter(
                     // 表示の1分タイムアウトは、読み上げ処理の開始時点から数える
                     startAutoDismiss(current.id)
                     val speak = !current.skipSpeech && current.speechText.isNotBlank()
-                    if (speak || current.soundEffect != NotificationSoundEffect.None) {
+                    val audible = presenceGate?.mayPlayNow() != false
+                    if (audible && (speak || current.soundEffect != NotificationSoundEffect.None)) {
                         announcementGate.withLock {
                             if (!announcementGate.shouldContinueSpeech()) {
                                 return@withLock
@@ -285,12 +288,14 @@ fun rememberNotificationCenter(
     speaker: SpeechSpeaker,
     effects: EffectPlayer,
     announcementGate: AnnouncementGate,
+    presenceGate: SoundPresenceGate? = null,
 ): NotificationCenter {
-    val center = remember(speaker, effects, announcementGate) {
+    val center = remember(speaker, effects, announcementGate, presenceGate) {
         NotificationCenter(
             speaker = speaker,
             effects = effects,
             announcementGate = announcementGate,
+            presenceGate = presenceGate,
         )
     }
     DisposableEffect(center) {

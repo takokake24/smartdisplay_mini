@@ -78,6 +78,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import app.smartdisplay.audio.SoundPresenceGate
 import app.smartdisplay.audio.SoundTestPage
 import app.smartdisplay.calendar.CalendarDaySections
 import app.smartdisplay.calendar.CalendarEvent
@@ -132,6 +133,7 @@ fun MenuScreen(
     now: LocalDateTime,
     jihouSettings: JihouSettings,
     notificationAnnounceSettings: NotificationAnnounceSettings,
+    soundPresenceGate: SoundPresenceGate,
     chimeController: HourlyChimeController,
     announcementGate: AnnouncementGate,
     notifications: NotificationCenter,
@@ -319,12 +321,14 @@ fun MenuScreen(
                 notifications = notifications,
                 chimeController = chimeController,
                 announcementGate = announcementGate,
+                presenceGate = soundPresenceGate,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
             )
             MenuPage.NotificationSettings -> NotificationSettingsContent(
                 settings = notificationAnnounceSettings,
+                soundPresenceGate = soundPresenceGate,
                 onTapSound = onTapSound,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1239,6 +1243,7 @@ private fun CalendarEventRow(
 @Composable
 private fun NotificationSettingsContent(
     settings: NotificationAnnounceSettings,
+    soundPresenceGate: SoundPresenceGate,
     onTapSound: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1269,6 +1274,19 @@ private fun NotificationSettingsContent(
             onCheckedChange = { include ->
                 onTapSound()
                 settings.updateIncludeSilent(include)
+            },
+        )
+        SettingsToggle(
+            title = "外出中も鳴らす",
+            subtitle = if (soundPresenceGate.awaySoundEnabled) {
+                "オン（Wi-Fi・メディア・Bluetooth接続で自動オフ）"
+            } else {
+                "オフ"
+            },
+            checked = soundPresenceGate.awaySoundEnabled,
+            onCheckedChange = { enabled ->
+                onTapSound()
+                soundPresenceGate.setAwaySoundEnabled(enabled)
             },
         )
     }

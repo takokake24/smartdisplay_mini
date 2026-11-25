@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
+import app.smartdisplay.audio.SoundPresenceGate
 import app.smartdisplay.speech.AnnouncementGate
 import app.smartdisplay.speech.SpeechSpeaker
 import app.smartdisplay.speech.breathAtHalfWidthSpace
@@ -27,6 +28,7 @@ class HourlyChimeController(
     context: Context,
     private val speaker: SpeechSpeaker,
     private val announcementGate: AnnouncementGate,
+    private val presenceGate: SoundPresenceGate? = null,
     private val zoneId: ZoneId = ZoneId.systemDefault(),
     initiallyEnabled: Boolean = true,
 ) {
@@ -245,12 +247,23 @@ class HourlyChimeController(
         if (millis >= targetMillis) {
             if (lastAnnouncedKey != announceKey) {
                 lastAnnouncedKey = announceKey
-                announcementGate.setChimeSequenceActive(true)
-                try {
-                    speakTimeWithPriority(target)
-                } finally {
-                    announcementGate.setChimeSequenceActive(false)
+                if (mayPlayScheduled()) {
+                    announcementGate.setChimeSequenceActive(true)
+                    try {
+                        speakTimeWithPriority(target)
+                    } finally {
+                        announcementGate.setChimeSequenceActive(false)
+                    }
                 }
+            }
+            delay(1_000L)
+            return
+        }
+
+        if (!mayPlayScheduled()) {
+            // 外出抑制中は当該スロットを消化し、帰宅後に遅れて鳴らないようにする
+            if (millis >= chimeStartMillis - PrimeSilenceMs) {
+                lastAnnouncedKey = announceKey
             }
             delay(1_000L)
             return
@@ -259,6 +272,10 @@ class HourlyChimeController(
         // メロディは通知読み上げと並行可。読み上げ中は小さめ、完了後に戻す。
         announcementGate.setChimeSequenceActive(true)
         try {
+            if (!mayPlayScheduled()) {
+                lastAnnouncedKey = announceKey
+                return
+            }
             var chimeQueued = false
             if (
                 introResId != null &&
@@ -287,7 +304,9 @@ class HourlyChimeController(
                 if (millis >= targetMillis) {
                     if (lastAnnouncedKey != announceKey) {
                         lastAnnouncedKey = announceKey
-                        speakTimeWithPriority(target)
+                        if (mayPlayScheduled()) {
+                            speakTimeWithPriority(target)
+                        }
                     }
                     return
                 }
@@ -296,7 +315,7 @@ class HourlyChimeController(
                 val seekMs = (chimeDurationMs - remainingMs - PrimeSilenceMs)
                     .coerceIn(0L, chimeDurationMs - 1L)
                 val started = playbackMutex.withLock {
-                    if (!enabled) {
+                    if (!enabled || !mayPlayScheduled()) {
                         false
                     } else {
                         startPrimedPlaybackLocked(resId = resId, seekMs = seekMs, warmUp = true)
@@ -304,6 +323,9 @@ class HourlyChimeController(
                     }
                 }
                 if (!started) {
+                    if (!mayPlayScheduled()) {
+                        lastAnnouncedKey = announceKey
+                    }
                     return
                 }
             }
@@ -314,6 +336,11 @@ class HourlyChimeController(
             }
             if (!enabled) {
                 playbackMutex.withLock { releasePlayerLocked() }
+                return
+            }
+            if (!mayPlayScheduled()) {
+                playbackMutex.withLock { releasePlayerLocked() }
+                lastAnnouncedKey = announceKey
                 return
             }
             if (lastAnnouncedKey != announceKey) {
@@ -573,6 +600,9 @@ class HourlyChimeController(
             )
         }
     }
+
+    /** スケジュール時報のみ抑制。時報テストは対象外。 */
+    private fun mayPlayScheduled(): Boolean = presenceGate?.mayPlayNow() != false
 
     private fun nextChimeTime(from: LocalDateTime): LocalDateTime {
         val base = from.truncatedTo(ChronoUnit.MINUTES)

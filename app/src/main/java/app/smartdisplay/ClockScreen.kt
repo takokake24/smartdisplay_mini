@@ -68,6 +68,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import app.smartdisplay.audio.LocalPlaybackDucker
 import app.smartdisplay.audio.rememberEffectPlayer
+import app.smartdisplay.audio.rememberSoundPresenceGate
 import app.smartdisplay.jihou.holidayAndSeasonalLabel
 import app.smartdisplay.jihou.rememberHourlyChimeController
 import app.smartdisplay.jihou.rememberJihouSettings
@@ -121,7 +122,12 @@ fun ClockScreen() {
         onDispose { InternetConnectivity.stop() }
     }
     val online by InternetConnectivity.online.collectAsState()
+    val soundPresenceGate = rememberSoundPresenceGate()
     val effects = rememberEffectPlayer()
+    DisposableEffect(effects, soundPresenceGate) {
+        effects.presenceGate = soundPresenceGate
+        onDispose { effects.presenceGate = null }
+    }
     val playTap: () -> Unit = remember(effects) { { effects.playTap() } }
     val playBeep: () -> Unit = remember(effects) { { effects.playBeep() } }
     val speechSpeaker = rememberSpeechSpeaker()
@@ -139,12 +145,14 @@ fun ClockScreen() {
     val chimeController = rememberHourlyChimeController(
         speaker = speechSpeaker,
         announcementGate = announcementGate,
+        presenceGate = soundPresenceGate,
         enabled = jihouSettings.enabled,
     )
     val notifications = rememberNotificationCenter(
         speaker = speechSpeaker,
         effects = effects,
         announcementGate = announcementGate,
+        presenceGate = soundPresenceGate,
     )
     rememberDeviceNotificationAnnouncer(
         notifications = notifications,
@@ -181,8 +189,14 @@ fun ClockScreen() {
                 if (!announcementGate.shouldContinueSpeech()) {
                     return@withLock
                 }
+                if (!soundPresenceGate.mayPlayNow()) {
+                    return@withLock
+                }
                 runCatching { effects.playBeepAndAwait() }
                 if (!announcementGate.shouldContinueSpeech() || InternetConnectivity.online.value) {
+                    return@withLock
+                }
+                if (!soundPresenceGate.mayPlayNow()) {
                     return@withLock
                 }
                 speaking = true
@@ -230,6 +244,7 @@ fun ClockScreen() {
                     now = now,
                     jihouSettings = jihouSettings,
                     notificationAnnounceSettings = notificationAnnounceSettings,
+                    soundPresenceGate = soundPresenceGate,
                     chimeController = chimeController,
                     announcementGate = announcementGate,
                     notifications = notifications,

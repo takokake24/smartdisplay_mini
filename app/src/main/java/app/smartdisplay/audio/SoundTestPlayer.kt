@@ -18,6 +18,10 @@ class SoundTestPlayer(context: Context) {
     private var player: MediaPlayer? = null
     private var pausedForSpeech = false
 
+    /** 外出時の鳴動抑制。未設定なら常に鳴らす。 */
+    @Volatile
+    var presenceGate: SoundPresenceGate? = null
+
     private val _trackId = MutableStateFlow<Int?>(null)
     val trackId: StateFlow<Int?> = _trackId.asStateFlow()
 
@@ -25,6 +29,9 @@ class SoundTestPlayer(context: Context) {
     val playing: StateFlow<Boolean> = _playing.asStateFlow()
 
     fun play(resId: Int, playbackVolume: Float) {
+        if (presenceGate?.mayPlayNow() == false) {
+            return
+        }
         releasePlayer()
         pausedForSpeech = false
         val created = MediaPlayer.create(appContext, resId) ?: return

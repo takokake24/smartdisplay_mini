@@ -33,6 +33,10 @@ class EffectPlayer(context: Context) {
     private var beepLoaded = false
     private var activeStream = 0
 
+    /** 外出時の鳴動抑制。未設定なら常に鳴らす。 */
+    @Volatile
+    var presenceGate: SoundPresenceGate? = null
+
     init {
         soundPool.setOnLoadCompleteListener { _, sampleId, status ->
             if (status != 0) {
@@ -47,21 +51,26 @@ class EffectPlayer(context: Context) {
         beepId = soundPool.load(appContext, R.raw.beep, 1)
     }
 
+    private fun mayPlay(): Boolean = presenceGate?.mayPlayNow() != false
+
     fun playTap() {
-        if (!tapLoaded || tapId == 0) {
+        if (!mayPlay() || !tapLoaded || tapId == 0) {
             return
         }
         playExclusive(tapId)
     }
 
     fun playBeep() {
-        if (!beepLoaded || beepId == 0) {
+        if (!mayPlay() || !beepLoaded || beepId == 0) {
             return
         }
         playExclusive(beepId)
     }
 
     suspend fun playBeepAndAwait() {
+        if (!mayPlay()) {
+            return
+        }
         playRawAndAwait(R.raw.beep)
     }
 
@@ -83,12 +92,18 @@ class EffectPlayer(context: Context) {
     }
 
     suspend fun playNotice() {
+        if (!mayPlay()) {
+            return
+        }
         playRawAndAwait(R.raw.notice)
     }
 
     private suspend fun playRawAndAwait(resId: Int) {
         mutex.withLock {
             withContext(Dispatchers.Main) {
+                if (!mayPlay()) {
+                    return@withContext
+                }
                 if (activeStream != 0) {
                     soundPool.stop(activeStream)
                     activeStream = 0
