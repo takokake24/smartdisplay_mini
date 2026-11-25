@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
 import android.graphics.Bitmap
+import android.media.AudioManager
 import android.media.MediaMetadataRetriever
 import android.media.session.MediaSession
 import android.net.Uri
@@ -32,8 +33,9 @@ import kotlinx.coroutines.launch
  * 読み上げを切っているときは載せない。音の出ない通知は、設定で含めるときだけ載せる。
  * 再生コントロールと、Chrome の「サイトで〜が使用されています」「共有されています」、
  * Spotify の「Spotifyの接続」、Bose の「同期を維持します。」は対象にしない。
- * 音の出る通知は端末の通知音に任せ、こちらでは鳴らさない。
- * 音の出ない通知は共通の通知音を鳴らしてから読む。
+ * 端末の通知音が実際に鳴るときはそれに任せ、こちらでは鳴らさない。
+ * マナー／サイレント／通知音量0／DND などで鳴らないときと、もともと音なしの通知は、
+ * 共通の通知音を鳴らしてから読む。
  */
 interface DeviceNotificationSink {
     fun onListenerReady(active: List<StatusBarNotification>)
@@ -99,7 +101,7 @@ class DeviceNotificationAnnouncer(
         if (!settings.speechEnabled || captured.suspended || captured.groupSuppressed) {
             return false
         }
-        if (!captured.audible && !settings.includeSilent) {
+        if (!captured.hasAlertSound && !settings.includeSilent) {
             return false
         }
         if (captured.title.isBlank() && captured.body.isBlank()) {
@@ -145,7 +147,7 @@ class DeviceNotificationAnnouncer(
             title = captured.title.ifBlank { captured.appName },
             body = displayBody(captured.title, captured.body),
             speechText = captured.speech,
-            soundEffect = if (captured.audible) {
+            soundEffect = if (captured.systemPlaysSound) {
                 NotificationSoundEffect.None
             } else {
                 NotificationSoundEffect.Notice
@@ -171,7 +173,11 @@ class DeviceNotificationAnnouncer(
         }
         val appName = appLabel(sbn.packageName)
         val speech = speechText(appName, title, body)
-        val audible = isAudible(notification, ranking)
+        val hasAlertSound = hasAlertSound(notification, ranking)
+        val systemPlaysSound = hasAlertSound &&
+            ranking != null &&
+            ranking.matchesInterruptionFilter() &&
+            devicePlaysNotificationSound()
         val suspended = ranking != null &&
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
             ranking.isSuspended
@@ -187,8 +193,9 @@ class DeviceNotificationAnnouncer(
             inProgress = inProgress(notification),
             groupSuppressed = groupSuppressed(notification),
             suspended = suspended,
-            audible = audible,
-            soundUri = if (audible) ranking?.channel?.sound else null,
+            hasAlertSound = hasAlertSound,
+            systemPlaysSound = systemPlaysSound,
+            soundUri = if (systemPlaysSound) ranking?.channel?.sound else null,
             postedAt = SystemClock.elapsedRealtime(),
         )
     }
@@ -242,7 +249,8 @@ class DeviceNotificationAnnouncer(
         return extras.getString(Notification.EXTRA_TEMPLATE).orEmpty().contains("MediaStyle")
     }
 
-    private fun isAudible(notification: Notification, ranking: Ranking?): Boolean {
+    /** 通知チャンネル側に音があるか。端末のマナー／DND は見ない。 */
+    private fun hasAlertSound(notification: Notification, ranking: Ranking?): Boolean {
         if (ranking == null) {
             return false
         }
@@ -252,14 +260,25 @@ class DeviceNotificationAnnouncer(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && ranking.isSuspended) {
             return false
         }
-        if (!ranking.matchesInterruptionFilter()) {
-            return false
-        }
         if (ranking.importance < NotificationManager.IMPORTANCE_DEFAULT) {
             return false
         }
         val sound = ranking.channel?.sound ?: return false
         return sound != Uri.EMPTY
+    }
+
+    /** マナー／サイレント／通知音量0のときは端末の通知音は鳴らない。 */
+    private fun devicePlaysNotificationSound(): Boolean {
+        val audio = appContext.getSystemService(AudioManager::class.java) ?: return true
+        when (audio.ringerMode) {
+            AudioManager.RINGER_MODE_SILENT,
+            AudioManager.RINGER_MODE_VIBRATE,
+            -> return false
+        }
+        if (audio.isStreamMute(AudioManager.STREAM_NOTIFICATION)) {
+            return false
+        }
+        return audio.getStreamVolume(AudioManager.STREAM_NOTIFICATION) > 0
     }
 
     private fun groupSuppressed(notification: Notification): Boolean {
@@ -466,7 +485,8 @@ class DeviceNotificationAnnouncer(
         val inProgress: Boolean,
         val groupSuppressed: Boolean,
         val suspended: Boolean,
-        val audible: Boolean,
+        val hasAlertSound: Boolean,
+        val systemPlaysSound: Boolean,
         val soundUri: Uri?,
         val postedAt: Long,
     )
