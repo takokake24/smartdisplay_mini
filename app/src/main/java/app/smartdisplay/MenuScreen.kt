@@ -1481,7 +1481,16 @@ private fun AudioPrioritySettingsContent(
 private fun loadLauncherApps(context: Context): List<LauncherAppRow> {
     val pm = context.packageManager
     val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-    val resolved = pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+    // MATCH_DEFAULT_ONLY だと CATEGORY_DEFAULT が無いランチャーが落ちる
+    val resolved = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+        pm.queryIntentActivities(
+            intent,
+            PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_ALL.toLong()),
+        )
+    } else {
+        @Suppress("DEPRECATION")
+        pm.queryIntentActivities(intent, PackageManager.MATCH_ALL)
+    }
     val self = context.packageName
     return resolved.mapNotNull { info ->
         val packageName = info.activityInfo?.packageName ?: return@mapNotNull null
