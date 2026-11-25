@@ -20,7 +20,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDateTime
 import java.util.UUID
 import kotlin.collections.ArrayDeque
@@ -188,8 +190,13 @@ class NotificationCenter(
                     val speak = !current.skipSpeech && current.speechText.isNotBlank()
                     val audible = presenceGate?.mayPlayNow() != false
                     if (audible && (speak || current.soundEffect != NotificationSoundEffect.None)) {
+                        // 優先アプリ再生中は電池SEも含め、鳴り止んでから出す
+                        awaitPriorityAudioIdle()
                         announcementGate.withLock {
                             if (!announcementGate.shouldContinueSpeech()) {
+                                return@withLock
+                            }
+                            if (!awaitPriorityAudioIdle()) {
                                 return@withLock
                             }
                             when (current.soundEffect) {
@@ -205,6 +212,13 @@ class NotificationCenter(
                                 }
                             }
                             if (!speak || !announcementGate.shouldContinueSpeech()) {
+                                return@withLock
+                            }
+                            // SEのあいだに優先再生が始まっていたら止めて、また譲ってから読む
+                            if (priorityAudioActive.value) {
+                                runCatching { effects.stop() }
+                            }
+                            if (!awaitPriorityAudioIdle()) {
                                 return@withLock
                             }
                             speaker.speakNowYielding(
@@ -232,6 +246,22 @@ class NotificationCenter(
         if (remaining > 0L) {
             delay(remaining)
         }
+    }
+
+    /**
+     * 優先アプリの再生が終わるまで待つ。
+     * 時報割り込みで続行不可なら false。
+     */
+    private suspend fun awaitPriorityAudioIdle(): Boolean {
+        while (priorityAudioActive.value) {
+            if (!announcementGate.shouldContinueSpeech()) {
+                return false
+            }
+            withTimeoutOrNull(200L) {
+                priorityAudioActive.first { !it }
+            }
+        }
+        return announcementGate.shouldContinueSpeech()
     }
 
     private fun stopAlertPlayback() {
