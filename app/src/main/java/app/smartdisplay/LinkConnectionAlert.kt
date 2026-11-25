@@ -69,7 +69,6 @@ private class LinkConnectionAlerts(
     private var bluetoothReceiver: BroadcastReceiver? = null
     private var connectivityManager: ConnectivityManager? = null
     private var wifiCallback: ConnectivityManager.NetworkCallback? = null
-    private var wifiPostsToMain = false
     private var wifiAnnouncementsOpen = false
 
     fun start() {
@@ -148,32 +147,59 @@ private class LinkConnectionAlerts(
         }
         wifiAnnouncementsOpen = false
         seedWifi(manager)
-        val callback = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) {
-                dispatchWifi { onWifiUp(network, null) }
-            }
-
-            override fun onCapabilitiesChanged(
-                network: Network,
-                networkCapabilities: NetworkCapabilities,
-            ) {
-                if (!networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
-                    return
-                }
-                val name = ssidFrom(networkCapabilities)
-                dispatchWifi { onWifiUp(network, name) }
-            }
-
-            override fun onLost(network: Network) {
-                dispatchWifi { onWifiDown(network) }
-            }
-        }
+        val callback = wifiNetworkCallback()
         val registered = runCatching { registerWifiCallback(manager, callback) }.isSuccess
         if (!registered) {
             return
         }
         wifiCallback = callback
         handler.postDelayed({ wifiAnnouncementsOpen = true }, WifiBaselineMs)
+    }
+
+    private fun wifiNetworkCallback(): ConnectivityManager.NetworkCallback {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            return object : ConnectivityManager.NetworkCallback(
+                ConnectivityManager.NetworkCallback.FLAG_INCLUDE_LOCATION_INFO,
+            ) {
+                override fun onAvailable(network: Network) {
+                    onWifiUp(network, null)
+                }
+
+                override fun onCapabilitiesChanged(
+                    network: Network,
+                    networkCapabilities: NetworkCapabilities,
+                ) {
+                    onWifiCapabilities(network, networkCapabilities)
+                }
+
+                override fun onLost(network: Network) {
+                    onWifiDown(network)
+                }
+            }
+        }
+        return object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                onWifiUp(network, null)
+            }
+
+            override fun onCapabilitiesChanged(
+                network: Network,
+                networkCapabilities: NetworkCapabilities,
+            ) {
+                onWifiCapabilities(network, networkCapabilities)
+            }
+
+            override fun onLost(network: Network) {
+                onWifiDown(network)
+            }
+        }
+    }
+
+    private fun onWifiCapabilities(network: Network, networkCapabilities: NetworkCapabilities) {
+        if (!networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+            return
+        }
+        onWifiUp(network, ssidFrom(networkCapabilities))
     }
 
     private fun registerWifiCallback(
@@ -183,29 +209,7 @@ private class LinkConnectionAlerts(
         val request = NetworkRequest.Builder()
             .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
             .build()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            wifiPostsToMain = true
-            val included = runCatching {
-                manager.registerNetworkCallback(
-                    request,
-                    callback,
-                    ConnectivityManager.NetworkCallback.FLAG_INCLUDE_LOCATION_INFO,
-                )
-            }.isSuccess
-            if (included) {
-                return
-            }
-        }
-        wifiPostsToMain = false
         manager.registerNetworkCallback(request, callback, handler)
-    }
-
-    private fun dispatchWifi(block: () -> Unit) {
-        if (wifiPostsToMain) {
-            handler.post(block)
-        } else {
-            block()
-        }
     }
 
     private fun seedBluetooth() {
@@ -364,16 +368,17 @@ private class LinkConnectionAlerts(
     }
 }
 
+/** BluetoothProfile.HID_HOST（@SystemApi / hide）。キーボード等の接続済み検知用。 */
+private const val BluetoothHidHost = 4
+
 private fun bluetoothProfiles(): List<Int> {
     val profiles = mutableListOf(
         BluetoothProfile.HEADSET,
         BluetoothProfile.A2DP,
         BluetoothProfile.GATT,
         BluetoothProfile.GATT_SERVER,
+        BluetoothHidHost,
     )
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-        profiles += BluetoothProfile.HID_HOST
-    }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         profiles += BluetoothProfile.HEARING_AID
     }
