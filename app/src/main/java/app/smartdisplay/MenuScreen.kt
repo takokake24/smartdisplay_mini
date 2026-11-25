@@ -45,6 +45,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
@@ -72,6 +73,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -1404,6 +1406,7 @@ private fun AudioPrioritySettingsContent(
     val context = LocalContext.current
     var apps by remember { mutableStateOf<List<LauncherAppRow>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
+    var query by remember { mutableStateOf("") }
     LaunchedEffect(Unit) {
         apps = withContext(Dispatchers.Default) {
             loadLauncherApps(context.applicationContext)
@@ -1411,8 +1414,17 @@ private fun AudioPrioritySettingsContent(
         loading = false
     }
     val selected = settings.priorityPackages
-    val ordered = remember(apps, selected) {
-        apps.sortedWith(
+    val ordered = remember(apps, selected, query) {
+        val needle = query.trim()
+        val filtered = if (needle.isEmpty()) {
+            apps
+        } else {
+            apps.filter { app ->
+                app.label.contains(needle, ignoreCase = true) ||
+                    app.packageName.contains(needle, ignoreCase = true)
+            }
+        }
+        filtered.sortedWith(
             compareByDescending<LauncherAppRow> { it.packageName in selected }
                 .thenBy(String.CASE_INSENSITIVE_ORDER) { it.label },
         )
@@ -1434,6 +1446,11 @@ private fun AudioPrioritySettingsContent(
             color = Color.White.copy(alpha = 0.65f),
             fontSize = 18.sp,
         )
+        AppSearchField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier.fillMaxWidth(),
+        )
         when {
             loading -> {
                 Text(
@@ -1442,9 +1459,16 @@ private fun AudioPrioritySettingsContent(
                     fontSize = 20.sp,
                 )
             }
-            ordered.isEmpty() -> {
+            apps.isEmpty() -> {
                 Text(
                     text = "表示できるアプリがありません。",
+                    color = Color.White.copy(alpha = 0.65f),
+                    fontSize = 20.sp,
+                )
+            }
+            ordered.isEmpty() -> {
+                Text(
+                    text = "一致するアプリがありません。",
                     color = Color.White.copy(alpha = 0.65f),
                     fontSize = 20.sp,
                 )
@@ -1476,6 +1500,43 @@ private fun AudioPrioritySettingsContent(
             }
         }
     }
+}
+
+@Composable
+private fun AppSearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        singleLine = true,
+        textStyle = TextStyle(
+            color = Color.White,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Medium,
+        ),
+        cursorBrush = SolidColor(Color.White),
+        modifier = modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color.White.copy(alpha = 0.08f))
+            .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(20.dp))
+            .padding(horizontal = 22.dp, vertical = 16.dp),
+        decorationBox = { inner ->
+            Box(modifier = Modifier.fillMaxWidth()) {
+                if (value.isEmpty()) {
+                    Text(
+                        text = "アプリ名で検索",
+                        color = Color.White.copy(alpha = 0.45f),
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+                inner()
+            }
+        },
+    )
 }
 
 private fun loadLauncherApps(context: Context): List<LauncherAppRow> {
