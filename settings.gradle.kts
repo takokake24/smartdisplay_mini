@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "smartdisplay"
+rootProject.name = "smartdisplay_mini"
 include(":app")
