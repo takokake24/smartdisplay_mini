@@ -13,7 +13,6 @@ import android.net.NetworkRequest
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.os.Process
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -217,11 +216,9 @@ class SoundPresenceGate(context: Context) {
         }
 
         fun isExternalMediaPlaying(manager: AudioManager): Boolean {
-            val myUid = Process.myUid()
+            // clientUid は SystemApi のため公開 SDK では使えず、一般アプリでは匿名化される。
+            // USAGE_MEDIA / GAME の有無だけで他アプリ再生を推定する。
             return manager.activePlaybackConfigurations.any { config ->
-                if (config.clientUid == myUid) {
-                    return@any false
-                }
                 when (config.audioAttributes.usage) {
                     AudioAttributes.USAGE_MEDIA,
                     AudioAttributes.USAGE_GAME,
