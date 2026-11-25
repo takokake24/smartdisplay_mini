@@ -144,10 +144,8 @@ private fun missingLinkPermissions(context: Context): List<String> {
     ) {
         names += Manifest.permission.NEARBY_WIFI_DEVICES
     }
-    if (
-        Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2 &&
-        !isGranted(context, Manifest.permission.ACCESS_FINE_LOCATION)
-    ) {
+    // WifiInfo の SSID は getScanResults と同じく位置情報が要る（Android 13 以降も）。
+    if (!isGranted(context, Manifest.permission.ACCESS_FINE_LOCATION)) {
         names += Manifest.permission.ACCESS_FINE_LOCATION
     }
     return names
@@ -159,4 +157,4 @@ private fun isGranted(context: Context, permission: String): Boolean {
 
 private const val PrefsName = "startup_permissions"
 private const val KeyStep = "step"
-private const val KeyLinkPrompted = "link_prompted"
+private const val KeyLinkPrompted = "link_prompted_v2"

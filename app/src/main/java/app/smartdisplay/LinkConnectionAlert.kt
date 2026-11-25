@@ -1,8 +1,10 @@
 package app.smartdisplay
 
 import android.annotation.SuppressLint
+import android.bluetooth.BluetoothA2dp
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothHeadset
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.content.BroadcastReceiver
@@ -29,7 +31,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.smartdisplay.util.showOsAlert
 
 private const val UnknownEndpoint = "不明"
-private const val WifiNameGraceMs = 350L
+private const val WifiNameGraceMs = 1_500L
 private const val WifiBaselineMs = 400L
 
 /**
@@ -112,6 +114,9 @@ private class LinkConnectionAlerts(
                         val device = bluetoothDevice(intent) ?: return
                         onBluetoothLink(device, connected = false)
                     }
+                    BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED,
+                    BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED,
+                    -> onBluetoothProfile(intent)
                     BluetoothAdapter.ACTION_STATE_CHANGED -> onBluetoothRadioOff(intent)
                 }
             }
@@ -119,14 +124,17 @@ private class LinkConnectionAlerts(
         val filter = IntentFilter().apply {
             addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
             addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
+            addAction(BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED)
+            addAction(BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED)
             addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
         }
+        // ACL などはシステムの外向けブロードキャスト。NOT_EXPORTED だと届かない。
         val registered = runCatching {
             ContextCompat.registerReceiver(
                 context,
                 receiver,
                 filter,
-                ContextCompat.RECEIVER_NOT_EXPORTED,
+                ContextCompat.RECEIVER_EXPORTED,
             )
         }.isSuccess
         if (!registered) {
@@ -224,6 +232,15 @@ private class LinkConnectionAlerts(
         }
     }
 
+    private fun onBluetoothProfile(intent: Intent) {
+        val state = intent.getIntExtra(BluetoothProfile.EXTRA_STATE, BluetoothProfile.STATE_DISCONNECTED)
+        val device = bluetoothDevice(intent) ?: return
+        when (state) {
+            BluetoothProfile.STATE_CONNECTED -> onBluetoothLink(device, connected = true)
+            BluetoothProfile.STATE_DISCONNECTED -> onBluetoothLink(device, connected = false)
+        }
+    }
+
     private fun onBluetoothLink(device: BluetoothDevice, connected: Boolean) {
         val address = deviceAddress(device) ?: return
         val name = deviceLabel(device)
@@ -302,13 +319,21 @@ private class LinkConnectionAlerts(
         }
         if (previous == null) {
             if (resolved != null) {
+                cancelConnectToast(key)
                 showOsAlert(wifiText(connected = true, resolved))
             } else {
                 scheduleConnectToast(key)
             }
             return
         }
-        if (resolved == null || previous == UnknownEndpoint || resolved == previous) {
+        if (resolved == null || resolved == previous) {
+            return
+        }
+        if (previous == UnknownEndpoint) {
+            if (connectTickets.containsKey(key)) {
+                cancelConnectToast(key)
+                showOsAlert(wifiText(connected = true, resolved))
+            }
             return
         }
         cancelConnectToast(key)
@@ -335,7 +360,15 @@ private class LinkConnectionAlerts(
                 return@postDelayed
             }
             connectTickets.remove(key)
-            val name = wifiLinks[key] ?: return@postDelayed
+            val current = wifiLinks[key] ?: return@postDelayed
+            val name = if (current == UnknownEndpoint) {
+                currentSsid() ?: current
+            } else {
+                current
+            }
+            if (name != current) {
+                wifiLinks[key] = name
+            }
             showOsAlert(wifiText(connected = true, name))
         }, WifiNameGraceMs)
     }
@@ -347,13 +380,16 @@ private class LinkConnectionAlerts(
     private fun ssidFrom(caps: NetworkCapabilities?): String? {
         return runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val info = caps?.transportInfo as? WifiInfo
-                cleanSsid(info?.ssid)?.let { return@runCatching it }
+                cleanSsid((caps?.transportInfo as? WifiInfo)?.ssid)?.let { return@runCatching it }
             }
-            val wifi = context.getSystemService(WifiManager::class.java) ?: return@runCatching null
-            @Suppress("DEPRECATION")
-            cleanSsid(wifi.connectionInfo?.ssid)
+            currentSsid()
         }.getOrNull()
+    }
+
+    private fun currentSsid(): String? {
+        val wifi = context.getSystemService(WifiManager::class.java) ?: return null
+        @Suppress("DEPRECATION")
+        return cleanSsid(wifi.connectionInfo?.ssid)
     }
 
     private fun canReadBluetooth(): Boolean {
