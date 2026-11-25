@@ -41,6 +41,7 @@ class NotificationCenter(
     private val effects: EffectPlayer,
     private val announcementGate: AnnouncementGate,
     private val presenceGate: SoundPresenceGate? = null,
+    private val priorityAudioActive: StateFlow<Boolean> = MutableStateFlow(false),
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val pendingAlerts = ArrayDeque<AppNotification>()
@@ -206,7 +207,11 @@ class NotificationCenter(
                             if (!speak || !announcementGate.shouldContinueSpeech()) {
                                 return@withLock
                             }
-                            speaker.speakNow(spokenText(current))
+                            speaker.speakNowYielding(
+                                text = spokenText(current),
+                                yieldWhile = priorityAudioActive,
+                                shouldContinue = { announcementGate.shouldContinueSpeech() },
+                            )
                         }
                     }
                     // 読み上げ中に時報が始まった場合も、一連が終わるまで次へ進まない

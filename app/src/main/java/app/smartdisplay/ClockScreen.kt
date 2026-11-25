@@ -176,7 +176,11 @@ fun ClockScreen() {
                     return@withLock
                 }
                 speaking = true
-                speechSpeaker.speakNow(connectionNotification.speechText)
+                speechSpeaker.speakNowYielding(
+                    text = connectionNotification.speechText,
+                    yieldWhile = runtime.priorityAudioMonitor.active,
+                    shouldContinue = { announcementGate.shouldContinueSpeech() },
+                )
                 speaking = false
             }
         } finally {
@@ -219,6 +223,7 @@ fun ClockScreen() {
                 MenuScreen(
                     now = now,
                     jihouSettings = jihouSettings,
+                    audioPrioritySettings = runtime.audioPrioritySettings,
                     notificationAnnounceSettings = notificationAnnounceSettings,
                     batteryAnnounceSettings = batteryAnnounceSettings,
                     soundPresenceGate = soundPresenceGate,

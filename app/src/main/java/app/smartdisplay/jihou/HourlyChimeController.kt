@@ -15,6 +15,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -29,6 +32,7 @@ class HourlyChimeController(
     private val speaker: SpeechSpeaker,
     private val announcementGate: AnnouncementGate,
     private val presenceGate: SoundPresenceGate? = null,
+    private val priorityAudioActive: StateFlow<Boolean> = MutableStateFlow(false),
     private val zoneId: ZoneId = ZoneId.systemDefault(),
     initiallyEnabled: Boolean = true,
 ) {
@@ -49,9 +53,14 @@ class HourlyChimeController(
 
     init {
         duckJob = scope.launch {
-            announcementGate.speechActive.collect { speaking ->
+            combine(
+                announcementGate.speechActive,
+                priorityAudioActive,
+            ) { speaking, priority ->
+                speaking || priority
+            }.collect { ducked ->
                 playbackMutex.withLock {
-                    applyPlaybackVolumeLocked(ducked = speaking)
+                    applyPlaybackVolumeLocked(ducked = ducked)
                 }
             }
         }
@@ -214,8 +223,9 @@ class HourlyChimeController(
         announcementGate.withPriorityLock(
             interrupt = { speaker.stop() },
         ) {
-            speaker.speakNow(
+            speaker.speakNowYielding(
                 text = breathAtHalfWidthSpace(scheduledJihouAnnouncement(time)),
+                yieldWhile = priorityAudioActive,
                 volume = SpeechVolume,
             )
         }
@@ -617,8 +627,9 @@ class HourlyChimeController(
         announcementGate.withPriorityLock(
             interrupt = { speaker.stop() },
         ) {
-            speaker.speakNow(
+            speaker.speakNowYielding(
                 text = breathAtHalfWidthSpace(scheduledJihouAnnouncement(target)),
+                yieldWhile = priorityAudioActive,
                 volume = SpeechVolume,
             )
         }
@@ -731,15 +742,19 @@ class HourlyChimeController(
             if (mediaPlayer !== player) {
                 return
             }
-            applyPlaybackVolumeLocked(ducked = announcementGate.speechActive.value)
+            applyPlaybackVolumeLocked(ducked = shouldDuck())
         } else {
-            applyPlaybackVolumeLocked(ducked = announcementGate.speechActive.value)
+            applyPlaybackVolumeLocked(ducked = shouldDuck())
             runCatching { player.start() }
         }
     }
 
+    private fun shouldDuck(): Boolean {
+        return announcementGate.speechActive.value || priorityAudioActive.value
+    }
+
     private fun playbackVolume(
-        ducked: Boolean = announcementGate.speechActive.value,
+        ducked: Boolean = shouldDuck(),
     ): Float {
         return if (ducked) DuckVolume else NormalVolume
     }

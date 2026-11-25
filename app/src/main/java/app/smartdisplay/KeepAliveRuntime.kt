@@ -2,8 +2,10 @@ package app.smartdisplay
 
 import android.app.Application
 import android.content.Context
+import app.smartdisplay.audio.AudioPrioritySettings
 import app.smartdisplay.audio.EffectPlayer
 import app.smartdisplay.audio.LocalPlaybackDucker
+import app.smartdisplay.audio.PriorityAudioMonitor
 import app.smartdisplay.audio.SoundPresenceGate
 import app.smartdisplay.battery.BatteryAnnounceSettings
 import app.smartdisplay.battery.BatteryAnnouncer
@@ -36,6 +38,8 @@ class KeepAliveRuntime(private val app: Application) {
         private set
     lateinit var jihouSettings: JihouSettings
         private set
+    lateinit var audioPrioritySettings: AudioPrioritySettings
+        private set
     lateinit var notificationAnnounceSettings: NotificationAnnounceSettings
         private set
     lateinit var batteryAnnounceSettings: BatteryAnnounceSettings
@@ -43,6 +47,8 @@ class KeepAliveRuntime(private val app: Application) {
     lateinit var chimeController: HourlyChimeController
         private set
     lateinit var notifications: NotificationCenter
+        private set
+    lateinit var priorityAudioMonitor: PriorityAudioMonitor
         private set
 
     private lateinit var playbackDucker: LocalPlaybackDucker
@@ -63,6 +69,11 @@ class KeepAliveRuntime(private val app: Application) {
             }
             speechSpeaker = SpeechSpeaker(app)
             jihouSettings = JihouSettings(app)
+            audioPrioritySettings = AudioPrioritySettings(app)
+            priorityAudioMonitor = PriorityAudioMonitor(app, audioPrioritySettings)
+            audioPrioritySettings.onPackagesChanged = {
+                priorityAudioMonitor.refresh()
+            }
             notificationAnnounceSettings = NotificationAnnounceSettings(app)
             batteryAnnounceSettings = BatteryAnnounceSettings(app)
             chimeController = HourlyChimeController(
@@ -70,6 +81,7 @@ class KeepAliveRuntime(private val app: Application) {
                 speaker = speechSpeaker,
                 announcementGate = announcementGate,
                 presenceGate = presenceGate,
+                priorityAudioActive = priorityAudioMonitor.active,
                 initiallyEnabled = jihouSettings.enabled,
             )
             notifications = NotificationCenter(
@@ -77,6 +89,7 @@ class KeepAliveRuntime(private val app: Application) {
                 effects = effects,
                 announcementGate = announcementGate,
                 presenceGate = presenceGate,
+                priorityAudioActive = priorityAudioMonitor.active,
             )
             deviceAnnouncer = DeviceNotificationAnnouncer(
                 context = app,
@@ -98,6 +111,7 @@ class KeepAliveRuntime(private val app: Application) {
                 silenceAudible()
             }
             presenceGate.start()
+            priorityAudioMonitor.start()
             chimeController.start()
             deviceAnnouncer.start()
             batteryAnnouncer.start()
@@ -167,6 +181,8 @@ class KeepAliveRuntime(private val app: Application) {
             runCatching { notifications.release() }
             runCatching { speechSpeaker.release() }
             runCatching { effects.release() }
+            runCatching { priorityAudioMonitor.release() }
+            audioPrioritySettings.onPackagesChanged = null
             runCatching { presenceGate.release() }
             runCatching { playbackDucker.setDucked(false) }
         }

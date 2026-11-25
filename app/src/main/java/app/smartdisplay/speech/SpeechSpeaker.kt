@@ -13,6 +13,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
@@ -118,6 +121,52 @@ class SpeechSpeaker(context: Context) {
         } finally {
             if (currentDone === done) {
                 currentDone = null
+            }
+        }
+    }
+
+    /**
+     * [yieldWhile] が true のあいだは始めず、途中で true になったら止めて
+     * 鳴り止んでから同じ文言を最初から読み直す。
+     * [shouldContinue] が false なら待ちや再試行をやめて戻る（時報割り込み用）。
+     */
+    suspend fun speakNowYielding(
+        text: String,
+        yieldWhile: StateFlow<Boolean>,
+        flush: Boolean = true,
+        volume: Float = 1f,
+        shouldContinue: () -> Boolean = { true },
+    ): Boolean {
+        while (true) {
+            while (yieldWhile.value) {
+                if (!shouldContinue()) {
+                    return false
+                }
+                withTimeoutOrNull(200L) {
+                    yieldWhile.first { !it }
+                }
+            }
+            if (!shouldContinue()) {
+                return false
+            }
+            var interruptedByYield = false
+            val result = coroutineScope {
+                val watch = launch {
+                    yieldWhile.first { it }
+                    interruptedByYield = true
+                    stop()
+                }
+                try {
+                    speakNow(text = text, flush = flush, volume = volume)
+                } finally {
+                    watch.cancel()
+                }
+            }
+            if (!interruptedByYield) {
+                return result
+            }
+            if (!shouldContinue()) {
+                return false
             }
         }
     }

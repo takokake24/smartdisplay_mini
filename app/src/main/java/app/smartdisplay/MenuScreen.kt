@@ -5,6 +5,11 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas as AndroidCanvas
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.media.AudioManager
 import android.net.Uri
 import android.os.BatteryManager
@@ -13,6 +18,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -64,8 +70,10 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -78,6 +86,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import app.smartdisplay.audio.AudioPrioritySettings
 import app.smartdisplay.audio.SoundPresenceGate
 import app.smartdisplay.audio.SoundTestPage
 import app.smartdisplay.battery.BatteryAnnounceMode
@@ -120,6 +129,7 @@ private enum class MenuPage {
     Settings,
     NotificationSettings,
     JihouSettings,
+    AudioPrioritySettings,
     TestExecution,
     JihouTest,
     Music,
@@ -134,6 +144,7 @@ private enum class MenuPage {
 fun MenuScreen(
     now: LocalDateTime,
     jihouSettings: JihouSettings,
+    audioPrioritySettings: AudioPrioritySettings,
     notificationAnnounceSettings: NotificationAnnounceSettings,
     batteryAnnounceSettings: BatteryAnnounceSettings,
     soundPresenceGate: SoundPresenceGate,
@@ -206,6 +217,7 @@ fun MenuScreen(
             -> page = MenuPage.Home
             MenuPage.NotificationSettings,
             MenuPage.JihouSettings,
+            MenuPage.AudioPrioritySettings,
             MenuPage.TestExecution,
             MenuPage.NetworkLog,
             MenuPage.SoundTest,
@@ -290,6 +302,7 @@ fun MenuScreen(
                 notificationAnnounceSettings = notificationAnnounceSettings,
                 batteryAnnounceSettings = batteryAnnounceSettings,
                 jihouSettings = jihouSettings,
+                audioPrioritySettings = audioPrioritySettings,
                 onOpenNotificationSettings = {
                     onTapSound()
                     page = MenuPage.NotificationSettings
@@ -297,6 +310,10 @@ fun MenuScreen(
                 onOpenJihouSettings = {
                     onTapSound()
                     page = MenuPage.JihouSettings
+                },
+                onOpenAudioPrioritySettings = {
+                    onTapSound()
+                    page = MenuPage.AudioPrioritySettings
                 },
                 onOpenTestExecution = {
                     onTapSound()
@@ -341,6 +358,13 @@ fun MenuScreen(
             )
             MenuPage.JihouSettings -> JihouSettingsContent(
                 settings = jihouSettings,
+                onTapSound = onTapSound,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+            )
+            MenuPage.AudioPrioritySettings -> AudioPrioritySettingsContent(
+                settings = audioPrioritySettings,
                 onTapSound = onTapSound,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -763,8 +787,10 @@ private fun SettingsContent(
     notificationAnnounceSettings: NotificationAnnounceSettings,
     batteryAnnounceSettings: BatteryAnnounceSettings,
     jihouSettings: JihouSettings,
+    audioPrioritySettings: AudioPrioritySettings,
     onOpenNotificationSettings: () -> Unit,
     onOpenJihouSettings: () -> Unit,
+    onOpenAudioPrioritySettings: () -> Unit,
     onOpenTestExecution: () -> Unit,
     onOpenNetworkLog: () -> Unit,
     onOpenSoundTest: () -> Unit,
@@ -778,6 +804,12 @@ private fun SettingsContent(
         BatteryAnnounceMode.Off -> "・電池オフ"
     }
     val notificationSubtitle = "$speech$silent$battery"
+    val priorityCount = audioPrioritySettings.priorityPackages.size
+    val prioritySubtitle = if (priorityCount == 0) {
+        "なし"
+    } else {
+        "${priorityCount}アプリ"
+    }
     MenuSubpageColumn(title = "設定", modifier = modifier) {
         SettingsItem(
             title = "通知設定",
@@ -788,6 +820,11 @@ private fun SettingsContent(
             title = "時報設定",
             subtitle = if (jihouSettings.enabled) "オン" else "オフ",
             onClick = onOpenJihouSettings,
+        )
+        SettingsItem(
+            title = "音声優先設定",
+            subtitle = prioritySubtitle,
+            onClick = onOpenAudioPrioritySettings,
         )
         SettingsItem(
             title = "テスト実行",
@@ -1352,6 +1389,136 @@ private fun JihouSettingsContent(
     }
 }
 
+private data class LauncherAppRow(
+    val packageName: String,
+    val label: String,
+    val icon: ImageBitmap?,
+)
+
+@Composable
+private fun AudioPrioritySettingsContent(
+    settings: AudioPrioritySettings,
+    onTapSound: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    var apps by remember { mutableStateOf<List<LauncherAppRow>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        apps = withContext(Dispatchers.Default) {
+            loadLauncherApps(context.applicationContext)
+        }
+        loading = false
+    }
+    val selected = settings.priorityPackages
+    val ordered = remember(apps, selected) {
+        apps.sortedWith(
+            compareByDescending<LauncherAppRow> { it.packageName in selected }
+                .thenBy(String.CASE_INSENSITIVE_ORDER) { it.label },
+        )
+    }
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(top = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text(
+            text = "音声優先設定",
+            color = Color.White,
+            fontSize = 30.sp,
+            fontWeight = FontWeight.Medium,
+        )
+        Text(
+            text = "選んだアプリの音声が鳴っているあいだ、時報メロディは音量を下げ、読み上げは譲ります。",
+            color = Color.White.copy(alpha = 0.65f),
+            fontSize = 18.sp,
+        )
+        when {
+            loading -> {
+                Text(
+                    text = "読み込み中…",
+                    color = Color.White.copy(alpha = 0.65f),
+                    fontSize = 20.sp,
+                )
+            }
+            ordered.isEmpty() -> {
+                Text(
+                    text = "表示できるアプリがありません。",
+                    color = Color.White.copy(alpha = 0.65f),
+                    fontSize = 20.sp,
+                )
+            }
+            else -> {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(
+                        items = ordered,
+                        key = { it.packageName },
+                    ) { app ->
+                        val checked = app.packageName in selected
+                        SettingsItem(
+                            title = app.label,
+                            subtitle = app.packageName,
+                            selected = checked,
+                            leadingIcon = app.icon,
+                            onClick = {
+                                onTapSound()
+                                settings.setPriority(app.packageName, !checked)
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun loadLauncherApps(context: Context): List<LauncherAppRow> {
+    val pm = context.packageManager
+    val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+    val resolved = pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+    val self = context.packageName
+    return resolved.mapNotNull { info ->
+        val packageName = info.activityInfo?.packageName ?: return@mapNotNull null
+        if (packageName == self) {
+            return@mapNotNull null
+        }
+        val label = runCatching {
+            info.loadLabel(pm)?.toString().orEmpty()
+        }.getOrDefault("").ifBlank { packageName }
+        val icon = runCatching {
+            drawableToImageBitmap(info.loadIcon(pm))
+        }.getOrNull()
+        LauncherAppRow(
+            packageName = packageName,
+            label = label,
+            icon = icon,
+        )
+    }.distinctBy { it.packageName }
+}
+
+private fun drawableToImageBitmap(drawable: Drawable?): ImageBitmap? {
+    if (drawable == null) {
+        return null
+    }
+    if (drawable is BitmapDrawable) {
+        val bitmap = drawable.bitmap ?: return null
+        return runCatching { bitmap.copy(Bitmap.Config.ARGB_8888, false)?.asImageBitmap() }.getOrNull()
+    }
+    val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: 96
+    val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: 96
+    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    val canvas = AndroidCanvas(bitmap)
+    drawable.setBounds(0, 0, canvas.width, canvas.height)
+    drawable.draw(canvas)
+    return bitmap.asImageBitmap()
+}
+
 @Composable
 private fun SettingsToggle(
     title: String,
@@ -1405,6 +1572,7 @@ private fun SettingsItem(
     onClick: () -> Unit,
     subtitle: String? = null,
     selected: Boolean = false,
+    leadingIcon: ImageBitmap? = null,
 ) {
     Panel(
         onClick = onClick,
@@ -1414,18 +1582,32 @@ private fun SettingsItem(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (leadingIcon != null) {
+                Image(
+                    bitmap = leadingIcon,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .padding(end = 16.dp)
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(10.dp)),
+                )
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
                     color = Color.White,
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 if (subtitle != null) {
                     Text(
                         text = subtitle,
                         color = Color.White.copy(alpha = 0.65f),
                         fontSize = 18.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 6.dp),
                     )
                 }
